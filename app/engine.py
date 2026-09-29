@@ -92,6 +92,43 @@ def unique_path(path):
     return f"{root} ({i}){ext}"
 
 
+# ---------------------------------------------------------------- video sites
+QUALITIES = {                  # label -> yt-dlp format selector
+    "Best quality": "bv*+ba/b",
+    "1080p": "bv*[height<=1080]+ba/b[height<=1080]/b",
+    "720p": "bv*[height<=720]+ba/b[height<=720]/b",
+    "480p": "bv*[height<=480]+ba/b[height<=480]/b",
+    "360p": "bv*[height<=360]+ba/b[height<=360]/b",
+    "Audio only (M4A)": "ba[ext=m4a]/ba/b",
+}
+QUALITIES_NO_FFMPEG = {        # single-file formats that need no merging
+    "Best quality": "b[ext=mp4]/b",
+    "1080p": "b[height<=1080][ext=mp4]/b[height<=1080]/b",
+    "720p": "b[height<=720][ext=mp4]/b[height<=720]/b",
+    "480p": "b[height<=480][ext=mp4]/b[height<=480]/b",
+    "360p": "b[height<=360][ext=mp4]/b[height<=360]/b",
+    "Audio only (M4A)": "ba[ext=m4a]/ba/b",
+}
+_VIDEO_IES = None
+_DIRECT_EXT = re.compile(r"\.(zip|rar|7z|exe|msi|iso|pdf|mp3|mp4|mkv|avi|apk|dmg|tar|gz|docx?|xlsx?|pptx?)$", re.I)
+
+
+def is_video_url(url):
+    """True when yt-dlp has a dedicated extractor for this page (YouTube, Facebook, ...)."""
+    global _VIDEO_IES
+    path = urllib.parse.urlparse(url).path
+    if _DIRECT_EXT.search(path):
+        return False
+    try:
+        if _VIDEO_IES is None:
+            from yt_dlp.extractor import gen_extractor_classes
+            _VIDEO_IES = [ie for ie in gen_extractor_classes()
+                          if ie.ie_key() not in ("Generic", "GenericEmbed") and ie.working()]
+        return any(ie.suitable(url) for ie in _VIDEO_IES)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 # ---------------------------------------------------------------- limiter
 class RateLimiter:
     """Global token bucket shared by every connection. rate = bytes/sec, 0 = unlimited."""
@@ -126,7 +163,7 @@ class RateLimiter:
 class Download:
     PERSIST = ("id", "url", "final_url", "save_dir", "filename", "temp_name", "size",
                "resumable", "segments", "status", "error", "connections", "headers",
-               "added", "finished", "path", "filename_locked")
+               "added", "finished", "path", "filename_locked", "kind", "quality")
 
     def __init__(self, engine, url, save_dir, filename=None, connections=8, headers=None):
         self.engine = engine
@@ -147,6 +184,8 @@ class Download:
         self.error = ""
         self.connections = max(1, min(32, int(connections)))
         self.headers = dict(headers or {})
+        self.kind = "file"            # "file" or "video" (YouTube & other sites via yt-dlp)
+        self.quality = "best"
         self.added = time.time()
         self.finished = 0
         self.path = ""
@@ -267,6 +306,8 @@ class Download:
         self.temp_name = self.filename + TEMP_EXT
 
     def _run(self):
+        if self.kind == "video":
+            return self._run_video()
         session = self._session()
         try:
             os.makedirs(self.save_dir, exist_ok=True)
@@ -301,6 +342,76 @@ class Download:
                 self.error = str(e)[:300]
         finally:
             session.close()
+            self.speed = 0
+            self.live_connections = 0
+            self.engine.request_save()
+
+    # video sites (YouTube, Facebook, X, TikTok, ...) through yt-dlp
+    def _run_video(self):
+        import yt_dlp
+        from yt_dlp.utils import DownloadCancelled
+        files = {}                    # file -> [downloaded, total]
+
+        def hook(h):
+            if self._stop.is_set():
+                raise DownloadCancelled("paused")
+            fn = h.get("filename") or ""
+            total = h.get("total_bytes") or h.get("total_bytes_estimate") or 0
+            if h.get("status") == "finished":
+                total = total or h.get("downloaded_bytes") or 0
+                files[fn] = [total, total]
+            elif h.get("status") == "downloading":
+                files[fn] = [h.get("downloaded_bytes") or 0, total]
+            done = sum(v[0] for v in files.values())
+            known = sum(v[1] for v in files.values())
+            if self._expected > known:
+                known = self._expected
+            if known:
+                self.size = int(known)
+            with self.lock:
+                self.segments = [{"start": 0, "end": max(0, self.size - 1), "done": int(done)}]
+            self.live_connections = 1
+
+        opts = self.engine.ytdl_options(self)
+        opts["progress_hooks"] = [hook]
+        self._expected = 0
+        try:
+            os.makedirs(self.save_dir, exist_ok=True)
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                if self._stop.is_set():
+                    return
+                if info.get("_type") == "playlist" and info.get("entries"):
+                    info = next(e for e in info["entries"] if e)
+                self.filename = safe_filename(f"{info.get('title') or 'video'}.{info.get('ext') or 'mp4'}")
+                if opts.get("merge_output_format") and info.get("requested_formats"):
+                    self.filename = os.path.splitext(self.filename)[0] + "." + opts["merge_output_format"]
+                parts = info.get("requested_formats") or [info]
+                self._expected = sum(int(f.get("filesize") or f.get("filesize_approx") or 0) for f in parts)
+                if self._expected:
+                    self.size = self._expected
+                self.engine.request_save()
+                res = ydl.process_ie_result(info, download=True)
+            path = ""
+            for rd in (res or {}).get("requested_downloads") or []:
+                path = rd.get("filepath") or path
+            path = path or (res or {}).get("filepath") or ""
+            if path and os.path.exists(path):
+                self.path = path
+                self.filename = os.path.basename(path)
+                self.size = os.path.getsize(path)
+            with self.lock:
+                self.segments = [{"start": 0, "end": max(0, self.size - 1), "done": max(0, self.size)}]
+            self.status = COMPLETED
+            self.finished = time.time()
+        except DownloadCancelled:
+            pass
+        except Exception as e:  # noqa: BLE001
+            if not self._stop.is_set():
+                self.status = ERROR
+                msg = re.sub(r"\x1b\[[0-9;]*m", "", str(e))
+                self.error = msg.replace("ERROR: ", "")[:400]
+        finally:
             self.speed = 0
             self.live_connections = 0
             self.engine.request_save()
@@ -476,14 +587,49 @@ class Engine:
         self._dirty = True
 
     # ---- api
-    def add(self, url, save_dir=None, filename=None, connections=None, headers=None, status=QUEUED):
+    def add(self, url, save_dir=None, filename=None, connections=None, headers=None,
+            status=QUEUED, kind=None, quality="Best quality"):
         d = Download(self, url, save_dir or self.settings["download_dir"], filename,
                      connections or self.settings.get("connections", 8), headers)
         d.status = status
+        d.kind = kind or ("video" if is_video_url(url) else "file")
+        d.quality = quality
+        if d.kind == "video" and not filename:
+            d.filename = "Video (reading info…)"
         with self.lock:
             self.downloads.append(d)
         self.request_save()
         return d
+
+    def ytdl_options(self, d):
+        ffmpeg = self.settings.get("ffmpeg_path") or ""
+        deno = self.settings.get("deno_path") or ""
+        table = QUALITIES if ffmpeg else QUALITIES_NO_FFMPEG
+        opts = {
+            "format": table.get(d.quality, table["Best quality"]),
+            "format_sort": ["res", "ext:mp4:m4a"],
+            "outtmpl": os.path.join(d.save_dir, "%(title).150B.%(ext)s"),
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "noprogress": True,
+            "continuedl": True,
+            "retries": 10,
+            "fragment_retries": 10,
+            "concurrent_fragment_downloads": max(1, min(8, d.connections)),
+            "windowsfilenames": True,
+            "http_headers": {k: v for k, v in d.headers.items() if k in ("User-Agent", "Referer")},
+        }
+        if ffmpeg:
+            opts["ffmpeg_location"] = ffmpeg
+            if d.quality != "Audio only (M4A)":
+                opts["merge_output_format"] = "mp4"
+        if deno:
+            opts["js_runtimes"] = {"deno": {"path": deno}}
+        rate = self.limiter.rate
+        if rate > 0:
+            opts["ratelimit"] = rate
+        return opts
 
     def get(self, did):
         for d in self.downloads:

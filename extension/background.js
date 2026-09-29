@@ -77,12 +77,29 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Download with JDM",
     contexts: ["link", "video", "audio", "image"],
   });
+  chrome.contextMenus.create({
+    id: "jdm-page",
+    title: "Download this page's video with JDM",
+    contexts: ["page"],
+  });
 });
 
 chrome.contextMenus.onClicked.addListener(async (info) => {
-  const url = info.linkUrl || info.srcUrl;
+  let url = info.menuItemId === "jdm-page" ? info.pageUrl : (info.linkUrl || info.srcUrl);
+  if (url && url.startsWith("blob:")) url = info.pageUrl;   // streamed video -> send the page
   if (!url) return;
   if (!(await sendToApp(url, "", info.pageUrl || ""))) {
     chrome.downloads.download({ url });
+  }
+});
+
+// Button injected on YouTube pages
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg && msg.type === "jdm-video") {
+    (async () => {
+      if (!(await appAlive())) return reply({ ok: false, reason: "JDM is not running" });
+      reply({ ok: await sendToApp(msg.url, "", msg.url) });
+    })();
+    return true;
   }
 });

@@ -18,7 +18,7 @@ import bridge
 import engine as E
 
 APP_NAME = "Jazira Download Manager"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -33,6 +33,24 @@ def data_dir():
 def resource(rel):
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(base, rel)
+
+
+def app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def find_tool(name):
+    """ffmpeg / deno: bundled in <app>/tools, else from PATH."""
+    import shutil
+    exe = name + (".exe" if sys.platform.startswith("win") else "")
+    p = os.path.join(app_dir(), "tools", exe)
+    return p if os.path.exists(p) else (shutil.which(name) or "")
+
+
+def extension_dir():
+    return os.path.join(app_dir(), "extension")
 
 
 DEFAULTS = {
@@ -62,8 +80,9 @@ def load_settings():
 
 
 def save_settings(s):
+    data = {k: v for k, v in s.items() if k not in ("ffmpeg_path", "deno_path")}
     with open(os.path.join(data_dir(), "settings.json"), "w", encoding="utf-8") as f:
-        json.dump(s, f, indent=1, ensure_ascii=False)
+        json.dump(data, f, indent=1, ensure_ascii=False)
 
 
 def open_path(path):
@@ -99,11 +118,20 @@ class AddDialog(QDialog):
         self.conn = QSpinBox()
         self.conn.setRange(1, 32)
         self.conn.setValue(int(settings["connections"]))
+        self.quality = QComboBox()
+        self.quality.addItems(list(E.QUALITIES.keys()))
+        self.quality_label = QLabel("Video quality:")
+        self.video_hint = QLabel("Video page detected – JDM will download the video itself.")
+        self.video_hint.setStyleSheet("color: #0e7490; font-weight: bold")
         form = QFormLayout()
         form.addRow("URL:", self.url)
         form.addRow("File name:", self.name)
         form.addRow("Save to:", row)
         form.addRow("Connections:", self.conn)
+        form.addRow(self.quality_label, self.quality)
+        form.addRow(self.video_hint)
+        self.url.textChanged.connect(self._check_video)
+        self._check_video()
         self.choice = None
         now = QPushButton("Download Now")
         now.setDefault(True)
@@ -121,6 +149,14 @@ class AddDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.addLayout(form)
         lay.addLayout(btns)
+
+    def _check_video(self):
+        self.is_video = E.is_video_url(self.url.text().strip())
+        for w in (self.quality, self.quality_label, self.video_hint):
+            w.setVisible(self.is_video)
+        self.name.setEnabled(not self.is_video)
+        self.name.setPlaceholderText("Taken from the video title" if self.is_video
+                                     else "Automatic (from server)")
 
     def _browse(self):
         d = QFileDialog.getExistingDirectory(self, "Save to", self.folder.text())
@@ -300,6 +336,7 @@ class MainWindow(QMainWindow):
         act("Settings", QStyle.SP_FileDialogDetailedView, self.settings_dialog)
         act("Open Folder", QStyle.SP_DirOpenIcon,
             lambda: open_path(self.settings["download_dir"]))
+        act("Browser", QStyle.SP_ComputerIcon, self.extension_help)
         tb.addSeparator()
         act("About", QStyle.SP_MessageBoxInformation, self.about)
 
@@ -364,9 +401,12 @@ class MainWindow(QMainWindow):
         dlg = AddDialog(self, self.settings, url, filename)
         dlg.setWindowFlag(Qt.WindowStaysOnTopHint, from_browser)
         if dlg.exec() == QDialog.Accepted:
+            video = dlg.is_video
             self.engine.add(dlg.url.text().strip(), dlg.folder.text().strip(),
-                            dlg.name.text().strip() or None, dlg.conn.value(), headers,
-                            status=dlg.choice)
+                            None if video else (dlg.name.text().strip() or None),
+                            dlg.conn.value(), headers, status=dlg.choice,
+                            kind="video" if video else "file",
+                            quality=dlg.quality.currentText())
             self._refresh(full=True)
 
     def resume_selected(self):
@@ -412,11 +452,39 @@ class MainWindow(QMainWindow):
             dlg.apply()
             save_settings(self.settings)
 
+    def extension_help(self):
+        path = extension_dir()
+        QGuiApplication.clipboard().setText(path)
+        box = QMessageBox(self)
+        box.setWindowTitle("Add JDM to Chrome / Edge")
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            "<b>Install the JDM browser extension (one time only):</b><ol>"
+            "<li>Chrome will open the <b>Extensions</b> page.</li>"
+            "<li>Turn on <b>Developer mode</b> (top-right).</li>"
+            "<li>Click <b>Load unpacked</b>.</li>"
+            "<li>Paste this folder path (already copied) and click <b>Select Folder</b>:<br>"
+            f"<code>{path}</code></li></ol>"
+            "After that, downloads and YouTube videos go to JDM automatically.")
+        chrome = box.addButton("Open Chrome", QMessageBox.AcceptRole)
+        edge = box.addButton("Open Edge", QMessageBox.AcceptRole)
+        box.addButton("Open Folder", QMessageBox.HelpRole).clicked.connect(lambda: open_path(path))
+        box.addButton(QMessageBox.Close)
+        box.exec()
+        clicked = box.clickedButton()
+        if sys.platform.startswith("win") and clicked in (chrome, edge):
+            target = ("chrome", "chrome://extensions") if clicked is chrome \
+                else ("msedge", "edge://extensions")
+            subprocess.Popen(["cmd", "/c", "start", "", target[0], target[1]],
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
     def about(self):
         QMessageBox.about(self, "About", f"<b>{APP_NAME}</b> {VERSION}<br><br>"
                           "Free download manager – no serial, no activation.<br>"
                           "Multi-connection downloads, pause/resume, scheduler, "
-                          "speed limiter and browser capture.")
+                          "speed limiter, browser capture and video downloads.<br><br>"
+                          f"FFmpeg: {'found' if self.settings.get('ffmpeg_path') else 'not found'}<br>"
+                          f"Deno: {'found' if self.settings.get('deno_path') else 'not found'}")
 
     def _context_menu(self, pos):
         items = self.selected()
@@ -583,9 +651,15 @@ def main():
     app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
     settings = load_settings()
+    settings["ffmpeg_path"] = find_tool("ffmpeg")
+    settings["deno_path"] = find_tool("deno")
     w = MainWindow(settings, start_hidden="--minimized" in args)
     if url:
         QTimer.singleShot(300, lambda: w.add_dialog(url))
+    elif not settings.get("_ext_hint_shown") and "--minimized" not in args:
+        settings["_ext_hint_shown"] = True
+        save_settings(settings)
+        QTimer.singleShot(600, w.extension_help)
     return app.exec()
 
 

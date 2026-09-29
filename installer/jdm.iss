@@ -2,7 +2,7 @@
 ; Build:  ISCC.exe /DMyAppVersion=1.0.0 installer\jdm.iss
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.1.0"
 #endif
 #define MyAppName "Jazira Download Manager"
 #define MyAppExe "JDM.exe"

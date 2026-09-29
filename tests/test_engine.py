@@ -109,3 +109,12 @@ assert check(d.path)
 print(f"4 speed limit OK, {dt:.1f}s (expected ~6s)")
 assert 4.5 < dt < 9
 print("ALL TESTS PASSED")
+
+# 5) video mode (yt-dlp) end-to-end on a local file via its generic extractor
+eng2.set_speed_limit_kb(0)
+d = eng2.add(BASE + "/video.mp4", kind="video")
+assert wait(eng2, d, lambda x: x.status in (E.COMPLETED, E.ERROR), 60)
+assert d.status == E.COMPLETED, d.error
+assert check(d.path), d.path
+print("5 video mode OK ->", os.path.basename(d.path))
+print("ALL VIDEO TESTS PASSED")
