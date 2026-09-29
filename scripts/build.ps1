@@ -1,5 +1,5 @@
 # Builds JDM.exe + the Windows installer. Called by .github/workflows/build.yml
-param([string]$Version = "1.2.2")
+param([string]$Version = "1.2.3")
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
