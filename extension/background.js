@@ -22,7 +22,7 @@ async function appAlive() {
   }
 }
 
-async function sendToApp(url, filename, referrer) {
+async function sendToApp(url, filename, referrer, quality) {
   let cookies = "";
   try {
     const list = await chrome.cookies.getAll({ url });
@@ -32,7 +32,7 @@ async function sendToApp(url, filename, referrer) {
     const r = await fetch(APP + "/add", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-JDM": "1" },
-      body: JSON.stringify({ url, filename, referrer, cookies, userAgent: navigator.userAgent }),
+      body: JSON.stringify({ url, filename, referrer, cookies, userAgent: navigator.userAgent, quality: quality || "" }),
     });
     return r.ok;
   } catch (e) {
@@ -98,7 +98,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg && msg.type === "jdm-video") {
     (async () => {
       if (!(await appAlive())) return reply({ ok: false, reason: "JDM is not running" });
-      reply({ ok: await sendToApp(msg.url, "", msg.url) });
+      reply({ ok: await sendToApp(msg.url, "", (sender.tab && sender.tab.url) || msg.url, msg.quality) });
     })();
     return true;
   }

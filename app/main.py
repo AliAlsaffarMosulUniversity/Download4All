@@ -18,7 +18,10 @@ import bridge
 import engine as E
 
 APP_NAME = "Jazira Download Manager"
-VERSION = "1.1.0"
+VERSION = "1.2.2"
+CONTACT_EMAIL = "alsfarly2@gmail.com"
+CONTACT_PHONE = "07740856155"
+COPYRIGHT = "© 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq"
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -295,12 +298,19 @@ class MainWindow(QMainWindow):
         self._build_tray()
         self.speed_label = QLabel()
         self.limit_label = QLabel()
+        self.copyright_label = QLabel("  " + COPYRIGHT)
+        self.copyright_label.setStyleSheet("color: gray")
+        self.copyright_label.setToolTip(f"Email: {CONTACT_EMAIL}\nPhone: {CONTACT_PHONE}")
+        self.statusBar().addWidget(self.copyright_label, 1)
+        self.contact_label = QLabel(f"{CONTACT_EMAIL}  |  {CONTACT_PHONE}  ")
+        self.contact_label.setStyleSheet("color: gray")
+        self.statusBar().addPermanentWidget(self.contact_label)
         self.statusBar().addPermanentWidget(self.limit_label)
         self.statusBar().addPermanentWidget(self.speed_label)
 
         self.server = bridge.start_server()
         if self.server is None:
-            self.statusBar().showMessage("Browser bridge port is busy – browser capture disabled.")
+            self._flash("Browser bridge port is busy – browser capture disabled.")
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -375,6 +385,10 @@ class MainWindow(QMainWindow):
             self.tray.show()
 
     # ---- helpers
+    def _flash(self, text, ms=0):
+        self.copyright_label.setText("  " + text)
+        QTimer.singleShot(ms or 8000, lambda: self.copyright_label.setText("  " + COPYRIGHT))
+
     def show_normal(self):
         self.show()
         self.setWindowState(self.windowState() & ~Qt.WindowMinimized)
@@ -387,18 +401,21 @@ class MainWindow(QMainWindow):
         return [d for d in self.engine.downloads if d.id in ids]
 
     # ---- actions
-    def add_dialog(self, url="", filename="", headers=None, from_browser=False):
+    def add_dialog(self, url="", filename="", headers=None, from_browser=False, quality=""):
         if not url:
             clip = QGuiApplication.clipboard().text().strip()
             if clip.lower().startswith(("http://", "https://")) and " " not in clip:
                 url = clip
         if from_browser and not self.settings["ask_on_browser_download"]:
-            self.engine.add(url, filename=filename or None, headers=headers)
+            self.engine.add(url, filename=filename or None, headers=headers,
+                            quality=quality if quality in E.QUALITIES else "Best quality")
             self.tray.showMessage(APP_NAME, f"Download added:\n{filename or url}",
                                   QSystemTrayIcon.Information, 3000)
             return
         self.show_normal()
         dlg = AddDialog(self, self.settings, url, filename)
+        if quality in E.QUALITIES:
+            dlg.quality.setCurrentText(quality)
         dlg.setWindowFlag(Qt.WindowStaysOnTopHint, from_browser)
         if dlg.exec() == QDialog.Accepted:
             video = dlg.is_video
@@ -479,7 +496,9 @@ class MainWindow(QMainWindow):
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def about(self):
-        QMessageBox.about(self, "About", f"<b>{APP_NAME}</b> {VERSION}<br><br>"
+        QMessageBox.about(self, "About", f"<b>{APP_NAME}</b> {VERSION}<br>{COPYRIGHT}<br><br>"
+                          f"Email: <a href='mailto:{CONTACT_EMAIL}'>{CONTACT_EMAIL}</a><br>"
+                          f"Phone: {CONTACT_PHONE}<br><br>"
                           "Free download manager – no serial, no activation.<br>"
                           "Multi-connection downloads, pause/resume, scheduler, "
                           "speed limiter, browser capture and video downloads.<br><br>"
@@ -531,7 +550,8 @@ class MainWindow(QMainWindow):
                     headers["Cookie"] = data["cookies"]
                 if data.get("userAgent"):
                     headers["User-Agent"] = data["userAgent"]
-                self.add_dialog(data["url"], data.get("filename", ""), headers, from_browser=True)
+                self.add_dialog(data["url"], data.get("filename", ""), headers, from_browser=True,
+                                quality=data.get("quality", ""))
         self._scheduler()
         self.engine.tick()
         self._refresh()
@@ -547,14 +567,14 @@ class MainWindow(QMainWindow):
         if hm == sc["start"] and self._fired.get("start") != today:
             self._fired["start"] = today
             self.engine.start_scheduled()
-            self.statusBar().showMessage("Scheduler: scheduled downloads started", 8000)
+            self._flash("Scheduler: scheduled downloads started", 8000)
         if sc["stop_enabled"] and hm == sc["stop"] and self._fired.get("stop") != today:
             self._fired["stop"] = today
             for d in self.engine.downloads:
                 if d.status in (E.DOWNLOADING, E.QUEUED):
                     d.stop(E.SCHEDULED)
             self.engine.request_save()
-            self.statusBar().showMessage("Scheduler: downloads stopped", 8000)
+            self._flash("Scheduler: downloads stopped", 8000)
 
     def _refresh(self, full=False):
         items = list(self.engine.downloads)

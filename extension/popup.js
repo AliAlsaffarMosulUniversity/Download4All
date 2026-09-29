@@ -1,4 +1,4 @@
-const DEFAULTS = { enabled: true, minSizeKB: 0, skipExt: "" };
+const DEFAULTS = { enabled: true, minSizeKB: 0, skipExt: "", hoverButton: true };
 
 (async () => {
   const s = Object.assign({}, DEFAULTS, await chrome.storage.local.get(Object.keys(DEFAULTS)));
@@ -8,6 +8,9 @@ const DEFAULTS = { enabled: true, minSizeKB: 0, skipExt: "" };
   en.checked = s.enabled;
   min.value = s.minSizeKB;
   skip.value = s.skipExt;
+  const hb = document.getElementById("hoverButton");
+  hb.checked = s.hoverButton;
+  hb.onchange = () => chrome.storage.local.set({ hoverButton: hb.checked });
   en.onchange = () => chrome.storage.local.set({ enabled: en.checked });
   min.onchange = () => chrome.storage.local.set({ minSizeKB: Math.max(0, parseInt(min.value) || 0) });
   skip.onchange = () => chrome.storage.local.set({ skipExt: skip.value });

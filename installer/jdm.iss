@@ -2,7 +2,7 @@
 ; Build:  ISCC.exe /DMyAppVersion=1.0.0 installer\jdm.iss
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.2"
 #endif
 #define MyAppName "Jazira Download Manager"
 #define MyAppExe "JDM.exe"
@@ -11,7 +11,12 @@
 AppId={{6C2B7E51-4A1D-4E8B-9C3F-2D7A51B0E9A4}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=Ali Alsaffar
+AppPublisher=Ali Abdulwahab Al-Saffar - Mosul, Iraq
+AppCopyright=(c) 2026 Ali Abdulwahab Al-Saffar. All rights reserved.
+AppContact=alsfarly2@gmail.com - 07740856155
+AppSupportURL=mailto:alsfarly2@gmail.com
+VersionInfoCompany=Ali Abdulwahab Al-Saffar
+VersionInfoCopyright=(c) 2026 Ali Abdulwahab Al-Saffar. All rights reserved.
 DefaultDirName={autopf}\JDM
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

@@ -39,3 +39,7 @@ extension/       Chrome / Edge extension (Manifest V3)
 installer/       Inno Setup script
 tests/           engine tests
 ```
+
+---
+© 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq.
+Email: alsfarly2@gmail.com · Phone: 07740856155
