@@ -9,6 +9,8 @@ Free download manager for Windows — no serial, no activation.
 - Scheduler: start and stop downloads at set times on chosen days
 - Browser capture for Chrome / Edge (extension in `extension/`)
 - Tray icon, completion notifications, optional start with Windows
+- Arabic / English interface
+- "Open / Play" button for finished files and a built-in player for video, audio and images
 
 ## Build the installer (GitHub Actions)
 1. Upload this folder to a new GitHub repository.
@@ -42,4 +44,4 @@ tests/           engine tests
 
 ---
 © 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq.
-Email: alsfarly2@gmail.com · Phone: 07740856155
+Email: alsfarly2@gmail.com · Support free service software – MasterCard: 2144558406

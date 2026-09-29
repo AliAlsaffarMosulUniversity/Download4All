@@ -1,5 +1,5 @@
 # Builds JDM.exe + the Windows installer. Called by .github/workflows/build.yml
-param([string]$Version = "1.2.3")
+param([string]$Version = "1.3.0")
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
@@ -11,7 +11,8 @@ python tests/test_engine.py;                                         Check "engi
 
 pyinstaller --noconfirm --clean --windowed --name JDM `
   --icon assets/jdm.ico --add-data "assets;assets" --paths app `
-  --collect-all yt_dlp_ejs app/main.py;                              Check "pyinstaller"
+  --collect-all yt_dlp_ejs --hidden-import PySide6.QtMultimedia `
+  --hidden-import PySide6.QtMultimediaWidgets app/main.py;                              Check "pyinstaller"
 
 # ---- bundled tools: FFmpeg (merges HD video + audio) and Deno (needed by YouTube)
 $tools = "dist/JDM/tools"

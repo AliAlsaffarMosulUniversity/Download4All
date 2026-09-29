@@ -5,23 +5,36 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtCore import QSize, Qt, QTime, QTimer, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QGuiApplication, QIcon, QKeySequence
+from PySide6.QtCore import QProcess, QSize, Qt, QTime, QTimer, QUrl
+from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QGuiApplication, QIcon,
+                           QKeySequence, QPainter, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QFileDialog, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSpinBox,
     QStyle, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTimeEdit, QToolBar,
     QVBoxLayout, QWidget)
 
 import bridge
 import engine as E
+import player
+from i18n import T, is_rtl, set_language
 
 APP_NAME = "Jazira Download Manager"
-VERSION = "1.2.2"
+VERSION = "1.3.0"
 CONTACT_EMAIL = "alsfarly2@gmail.com"
-CONTACT_PHONE = "07740856155"
-COPYRIGHT = "© 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq"
+DONATE_MASTERCARD = "2144558406"
+COPYRIGHT_EN = "© 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq"
+COPYRIGHT_AR = "© 2026 جميع الحقوق محفوظة للمبرمج علي عبد الوهاب الصفار – الموصل، العراق"
+
+
+def ltr(text):
+    """Keep numbers + units (e.g. '64.5 MB', '2.1 MB/s') in the right order inside Arabic UI."""
+    return f"\u2066{text}\u2069" if is_rtl() and text else text
+
+
+def copyright_text():
+    return COPYRIGHT_AR if is_rtl() else COPYRIGHT_EN
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -57,6 +70,7 @@ def extension_dir():
 
 
 DEFAULTS = {
+    "language": "",
     "download_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
     "connections": 8,
     "max_concurrent": 3,
@@ -102,18 +116,43 @@ def show_in_folder(path):
         open_path(os.path.dirname(path))
 
 
+def iraq_flag(width=30, height=20):
+    """Small Iraqi flag drawn in code (red / white / black, green 'الله أكبر')."""
+    scale = 3                                   # draw big, then scale down smoothly
+    w, h = width * scale, height * scale
+    pm = QPixmap(w, h)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setRenderHint(QPainter.TextAntialiasing)
+    band = h / 3
+    p.fillRect(0, 0, w, round(band), QColor("#CE1126"))
+    p.fillRect(0, round(band), w, round(band * 2) - round(band), QColor("#FFFFFF"))
+    p.fillRect(0, round(band * 2), w, h - round(band * 2), QColor("#000000"))
+    f = QFont("Arial")
+    f.setBold(True)
+    f.setPixelSize(int(band * 0.82))
+    p.setFont(f)
+    p.setPen(QColor("#007A3D"))
+    p.drawText(0, round(band), w, round(band), Qt.AlignCenter, "الله أكبر")
+    p.setPen(QColor(0, 0, 0, 60))
+    p.drawRect(0, 0, w - 1, h - 1)
+    p.end()
+    return pm.scaled(width, height, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+
+
 # ---------------------------------------------------------------- dialogs
 class AddDialog(QDialog):
     def __init__(self, parent, settings, url="", filename=""):
         super().__init__(parent)
-        self.setWindowTitle("Add Download")
+        self.setWindowTitle(T("Add Download"))
         self.setMinimumWidth(560)
         self.url = QLineEdit(url)
         self.url.setPlaceholderText("https://example.com/file.zip")
         self.name = QLineEdit(filename)
-        self.name.setPlaceholderText("Automatic (from server)")
+        self.name.setPlaceholderText(T("Automatic (from server)"))
         self.folder = QLineEdit(settings["download_dir"])
-        browse = QPushButton("Browse…")
+        browse = QPushButton(T("Browse…"))
         browse.clicked.connect(self._browse)
         row = QHBoxLayout()
         row.addWidget(self.folder)
@@ -122,25 +161,26 @@ class AddDialog(QDialog):
         self.conn.setRange(1, 32)
         self.conn.setValue(int(settings["connections"]))
         self.quality = QComboBox()
-        self.quality.addItems(list(E.QUALITIES.keys()))
-        self.quality_label = QLabel("Video quality:")
-        self.video_hint = QLabel("Video page detected – JDM will download the video itself.")
+        for q in E.QUALITIES:
+            self.quality.addItem(T(q), q)
+        self.quality_label = QLabel(T("Video quality:"))
+        self.video_hint = QLabel(T("Video page detected – JDM will download the video itself."))
         self.video_hint.setStyleSheet("color: #0e7490; font-weight: bold")
         form = QFormLayout()
-        form.addRow("URL:", self.url)
-        form.addRow("File name:", self.name)
-        form.addRow("Save to:", row)
-        form.addRow("Connections:", self.conn)
+        form.addRow(T("URL:"), self.url)
+        form.addRow(T("File name:"), self.name)
+        form.addRow(T("Save to:"), row)
+        form.addRow(T("Connections:"), self.conn)
         form.addRow(self.quality_label, self.quality)
         form.addRow(self.video_hint)
         self.url.textChanged.connect(self._check_video)
         self._check_video()
         self.choice = None
-        now = QPushButton("Download Now")
+        now = QPushButton(T("Download Now"))
         now.setDefault(True)
-        later = QPushButton("Add to Schedule")
-        paused = QPushButton("Add Paused")
-        cancel = QPushButton("Cancel")
+        later = QPushButton(T("Add to Schedule"))
+        paused = QPushButton(T("Add Paused"))
+        cancel = QPushButton(T("Cancel"))
         now.clicked.connect(lambda: self._done(E.QUEUED))
         later.clicked.connect(lambda: self._done(E.SCHEDULED))
         paused.clicked.connect(lambda: self._done(E.PAUSED))
@@ -158,18 +198,18 @@ class AddDialog(QDialog):
         for w in (self.quality, self.quality_label, self.video_hint):
             w.setVisible(self.is_video)
         self.name.setEnabled(not self.is_video)
-        self.name.setPlaceholderText("Taken from the video title" if self.is_video
-                                     else "Automatic (from server)")
+        self.name.setPlaceholderText(T("Taken from the video title") if self.is_video
+                                     else T("Automatic (from server)"))
 
     def _browse(self):
-        d = QFileDialog.getExistingDirectory(self, "Save to", self.folder.text())
+        d = QFileDialog.getExistingDirectory(self, T("Save to:"), self.folder.text())
         if d:
             self.folder.setText(d)
 
     def _done(self, status):
         u = self.url.text().strip()
         if not u.lower().startswith(("http://", "https://")):
-            QMessageBox.warning(self, APP_NAME, "Please enter a valid http:// or https:// URL.")
+            QMessageBox.warning(self, APP_NAME, T("Please enter a valid http:// or https:// URL."))
             return
         self.choice = status
         self.accept()
@@ -178,13 +218,17 @@ class AddDialog(QDialog):
 class SettingsDialog(QDialog):
     def __init__(self, parent, s):
         super().__init__(parent)
-        self.setWindowTitle("Settings")
+        self.setWindowTitle(T("Settings"))
         self.setMinimumWidth(480)
         self.s = s
+        self.lang = QComboBox()
+        self.lang.addItem("English", "en")
+        self.lang.addItem("العربية", "ar")
+        self.lang.setCurrentIndex(1 if s.get("language") == "ar" else 0)
         self.folder = QLineEdit(s["download_dir"])
-        b = QPushButton("Browse…")
+        b = QPushButton(T("Browse…"))
         b.clicked.connect(lambda: self.folder.setText(
-            QFileDialog.getExistingDirectory(self, "Download folder", self.folder.text())
+            QFileDialog.getExistingDirectory(self, T("Download folder"), self.folder.text())
             or self.folder.text()))
         row = QHBoxLayout()
         row.addWidget(self.folder)
@@ -198,19 +242,20 @@ class SettingsDialog(QDialog):
         self.limit = QSpinBox()
         self.limit.setRange(0, 1_000_000)
         self.limit.setSuffix(" KB/s")
-        self.limit.setSpecialValueText("Unlimited")
+        self.limit.setSpecialValueText(T("Unlimited"))
         self.limit.setValue(int(s["speed_limit_kb"]))
-        self.ask = QCheckBox("Show 'Add Download' window for browser downloads")
+        self.ask = QCheckBox(T("Show 'Add Download' window for browser downloads"))
         self.ask.setChecked(bool(s["ask_on_browser_download"]))
-        self.notify = QCheckBox("Notify when a download completes")
+        self.notify = QCheckBox(T("Notify when a download completes"))
         self.notify.setChecked(bool(s["notify_on_complete"]))
-        self.tray = QCheckBox("Closing the window keeps JDM running in the tray")
+        self.tray = QCheckBox(T("Closing the window keeps JDM running in the tray"))
         self.tray.setChecked(bool(s["close_to_tray"]))
         form = QFormLayout()
-        form.addRow("Default folder:", row)
-        form.addRow("Connections per file:", self.conn)
-        form.addRow("Simultaneous downloads:", self.maxc)
-        form.addRow("Speed limit:", self.limit)
+        form.addRow(T("Language:"), self.lang)
+        form.addRow(T("Default folder:"), row)
+        form.addRow(T("Connections per file:"), self.conn)
+        form.addRow(T("Simultaneous downloads:"), self.maxc)
+        form.addRow(T("Speed limit:"), self.limit)
         form.addRow(self.ask)
         form.addRow(self.notify)
         form.addRow(self.tray)
@@ -229,34 +274,35 @@ class SettingsDialog(QDialog):
         self.s["ask_on_browser_download"] = self.ask.isChecked()
         self.s["notify_on_complete"] = self.notify.isChecked()
         self.s["close_to_tray"] = self.tray.isChecked()
+        self.s["language"] = self.lang.currentData()
 
 
 class SchedulerDialog(QDialog):
     def __init__(self, parent, sched):
         super().__init__(parent)
-        self.setWindowTitle("Scheduler")
+        self.setWindowTitle(T("Scheduler"))
         self.sched = sched
-        self.enabled = QCheckBox("Enable scheduler")
+        self.enabled = QCheckBox(T("Enable scheduler"))
         self.enabled.setChecked(sched["enabled"])
         self.start = QTimeEdit(QTime.fromString(sched["start"], "HH:mm"))
         self.start.setDisplayFormat("HH:mm")
-        self.stop_en = QCheckBox("Stop (pause) downloads at:")
+        self.stop_en = QCheckBox(T("Stop (pause) downloads at:"))
         self.stop_en.setChecked(sched["stop_enabled"])
         self.stop = QTimeEdit(QTime.fromString(sched["stop"], "HH:mm"))
         self.stop.setDisplayFormat("HH:mm")
         days = QHBoxLayout()
         self.day_boxes = []
         for i, n in enumerate(DAYS):
-            c = QCheckBox(n)
+            c = QCheckBox(T(n))
             c.setChecked(i in sched["days"])
             self.day_boxes.append(c)
             days.addWidget(c)
-        grp = QGroupBox("Downloads marked 'Scheduled' start automatically")
+        grp = QGroupBox(T("Downloads marked 'Scheduled' start automatically"))
         form = QFormLayout(grp)
-        form.addRow("Start at:", self.start)
+        form.addRow(T("Start at:"), self.start)
         form.addRow(self.stop_en, self.stop)
-        form.addRow("Days:", days)
-        hint = QLabel("Tip: right-click a download → 'Move to Schedule'.")
+        form.addRow(T("Days:"), days)
+        hint = QLabel(T("Tip: right-click a download → 'Move to Schedule'."))
         hint.setStyleSheet("color: gray")
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
@@ -275,8 +321,107 @@ class SchedulerDialog(QDialog):
         self.sched["days"] = [i for i, c in enumerate(self.day_boxes) if c.isChecked()]
 
 
+# ---------------------------------------------------------------- small dialogs
+class DonateDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle(T("Support free service software"))
+        self.setMinimumWidth(430)
+        flag = QLabel()
+        flag.setPixmap(iraq_flag(54, 36))
+        flag.setAlignment(Qt.AlignCenter)
+        title = QLabel(T("Support free service software"))
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0c4a5c;")
+        msg = QLabel(T("JDM is free. If it helped you, you can support the design of more free service software."))
+        msg.setWordWrap(True)
+        msg.setAlignment(Qt.AlignCenter)
+        card = QFrame()
+        card.setStyleSheet("QFrame { background: #f1f7f9; border: 1px solid #cfe3ea; border-radius: 10px; }"
+                           "QLabel { border: none; background: transparent; }")
+        cl = QVBoxLayout(card)
+        lbl = QLabel(T("MasterCard number:"))
+        lbl.setAlignment(Qt.AlignCenter)
+        num = QLabel(DONATE_MASTERCARD)
+        num.setAlignment(Qt.AlignCenter)
+        num.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        num.setStyleSheet("font-size: 24px; font-weight: 700; letter-spacing: 3px; color: #111827;")
+        num.setLayoutDirection(Qt.LeftToRight)
+        cl.addWidget(lbl)
+        cl.addWidget(num)
+        self.copy_btn = QPushButton(T("Copy number"))
+        self.copy_btn.setStyleSheet("QPushButton { background: #0e7490; color: white; border: none; "
+                                    "border-radius: 8px; padding: 8px 18px; font-weight: 600; }"
+                                    "QPushButton:hover { background: #0c5f75; }")
+        self.copy_btn.clicked.connect(self._copy)
+        thanks = QLabel(T("Thank you for your support") + " ♥")
+        thanks.setAlignment(Qt.AlignCenter)
+        thanks.setStyleSheet("color: #6b7280;")
+        close = QPushButton(T("Close"))
+        close.clicked.connect(self.accept)
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(self.copy_btn)
+        row.addWidget(close)
+        row.addStretch()
+        lay = QVBoxLayout(self)
+        lay.setSpacing(10)
+        for w in (flag, title, msg, card):
+            lay.addWidget(w)
+        lay.addLayout(row)
+        lay.addWidget(thanks)
+
+    def _copy(self):
+        QGuiApplication.clipboard().setText(DONATE_MASTERCARD)
+        self.copy_btn.setText("✓ " + T("Copied"))
+
+
+class LanguageDialog(QDialog):
+    """First run: choose Arabic or English."""
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("JDM – Language / اللغة")
+        self.choice = "en"
+        flag = QLabel()
+        flag.setPixmap(iraq_flag(54, 36))
+        flag.setAlignment(Qt.AlignCenter)
+        q = QLabel("Choose the program language\nاختر لغة البرنامج")
+        q.setAlignment(Qt.AlignCenter)
+        q.setStyleSheet("font-size: 14px; font-weight: 600;")
+        ar = QPushButton("العربية")
+        en = QPushButton("English")
+        for b in (ar, en):
+            b.setMinimumSize(150, 44)
+            b.setStyleSheet("QPushButton { font-size: 15px; border-radius: 8px; border: 1px solid #0e7490; "
+                            "padding: 6px; } QPushButton:hover { background: #0e7490; color: white; }")
+        ar.clicked.connect(lambda: self._pick("ar"))
+        en.clicked.connect(lambda: self._pick("en"))
+        row = QHBoxLayout()
+        row.addWidget(ar)
+        row.addWidget(en)
+        lay = QVBoxLayout(self)
+        lay.addWidget(flag)
+        lay.addWidget(q)
+        lay.addLayout(row)
+
+    def _pick(self, lang):
+        self.choice = lang
+        self.accept()
+
+
 # ---------------------------------------------------------------- main window
-COLS = ["File Name", "Size", "Progress", "Speed", "Time Left", "Status", "Connections", "Added"]
+COLS = ["File Name", "Size", "Progress", "Speed", "Time Left", "Status", "Connections", "Added", "Action"]
+C_NAME, C_SIZE, C_PROG, C_SPEED, C_ETA, C_STATUS, C_CONN, C_ADDED, C_ACTION = range(9)
+
+FOOTER_CSS = """
+#footer { background: #f4f6f8; border-top: 1px solid #dde3e8; }
+#footer QLabel { color: #5b6470; }
+#donate { background: #0e7490; color: white; border: none; border-radius: 11px;
+          padding: 3px 14px; font-weight: 600; }
+#donate:hover { background: #0c5f75; }
+"""
+OPEN_BTN_CSS = ("QPushButton { background: #0e7490; color: white; border: none; border-radius: 5px; "
+                "padding: 2px 10px; font-weight: 600; } QPushButton:hover { background: #0c5f75; }")
 
 
 class MainWindow(QMainWindow):
@@ -287,30 +432,25 @@ class MainWindow(QMainWindow):
         self.icon = QIcon(resource(os.path.join("assets", "jdm.ico")))
         self.setWindowIcon(self.icon)
         self.setWindowTitle(f"{APP_NAME} {VERSION}")
-        self.resize(1050, 560)
+        self.resize(1120, 600)
         self._rows = []                    # download ids in table order
+        self._action_state = {}            # row -> (id, status) of the Open button
         self._last_status = {}
         self._fired = {}                   # scheduler: event -> date string
+        self._viewers = []
         self._quitting = False
 
         self._build_toolbar()
-        self._build_table()
+        self._build_central()
         self._build_tray()
         self.speed_label = QLabel()
         self.limit_label = QLabel()
-        self.copyright_label = QLabel("  " + COPYRIGHT)
-        self.copyright_label.setStyleSheet("color: gray")
-        self.copyright_label.setToolTip(f"Email: {CONTACT_EMAIL}\nPhone: {CONTACT_PHONE}")
-        self.statusBar().addWidget(self.copyright_label, 1)
-        self.contact_label = QLabel(f"{CONTACT_EMAIL}  |  {CONTACT_PHONE}  ")
-        self.contact_label.setStyleSheet("color: gray")
-        self.statusBar().addPermanentWidget(self.contact_label)
         self.statusBar().addPermanentWidget(self.limit_label)
         self.statusBar().addPermanentWidget(self.speed_label)
 
         self.server = bridge.start_server()
         if self.server is None:
-            self._flash("Browser bridge port is busy – browser capture disabled.")
+            self._flash(T("Browser bridge port is busy – browser capture disabled."))
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -329,7 +469,7 @@ class MainWindow(QMainWindow):
         st = self.style()
 
         def act(text, icon, slot, shortcut=None):
-            a = QAction(st.standardIcon(icon), text, self)
+            a = QAction(st.standardIcon(icon), T(text), self)
             a.triggered.connect(slot)
             if shortcut:
                 a.setShortcut(QKeySequence(shortcut))
@@ -350,32 +490,70 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         act("About", QStyle.SP_MessageBoxInformation, self.about)
 
-    def _build_table(self):
+    def _build_central(self):
         t = QTableWidget(0, len(COLS))
-        t.setHorizontalHeaderLabels(COLS)
+        t.setHorizontalHeaderLabels([T(c) for c in COLS])
         t.setSelectionBehavior(QAbstractItemView.SelectRows)
         t.setEditTriggers(QAbstractItemView.NoEditTriggers)
         t.verticalHeader().setVisible(False)
+        t.verticalHeader().setDefaultSectionSize(30)
         t.setAlternatingRowColors(True)
         t.setContextMenuPolicy(Qt.CustomContextMenu)
         t.customContextMenuRequested.connect(self._context_menu)
         t.doubleClicked.connect(self._double_click)
         h = t.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.Stretch)
-        for i, w in enumerate([0, 95, 170, 95, 85, 95, 90, 130]):
+        h.setSectionResizeMode(C_NAME, QHeaderView.Stretch)
+        for i, w in enumerate([0, 95, 160, 95, 90, 100, 90, 130, 90]):
             if w:
                 t.setColumnWidth(i, w)
         self.table = t
-        self.setCentralWidget(t)
+
+        # footer: copyright on one side; flag above e-mail + donate on the other
+        footer = QFrame()
+        footer.setObjectName("footer")
+        footer.setStyleSheet(FOOTER_CSS)
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(12, 4, 12, 4)
+        self.copyright_label = QLabel(copyright_text())
+        fl.addWidget(self.copyright_label, 1, Qt.AlignVCenter)
+        right = QVBoxLayout()
+        right.setSpacing(3)
+        flag = QLabel()
+        flag.setPixmap(iraq_flag(30, 20))
+        flag.setToolTip(T("Made in Mosul, Iraq"))
+        flag.setAlignment(Qt.AlignCenter)
+        right.addWidget(flag, 0, Qt.AlignHCenter)
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        mail = QLabel(f"<a href='mailto:{CONTACT_EMAIL}' style='color:#0e7490;text-decoration:none'>"
+                      f"✉ {CONTACT_EMAIL}</a>")
+        mail.setOpenExternalLinks(True)
+        mail.setLayoutDirection(Qt.LeftToRight)
+        donate = QPushButton("♥ " + T("Donate"))
+        donate.setObjectName("donate")
+        donate.setCursor(Qt.PointingHandCursor)
+        donate.clicked.connect(lambda: DonateDialog(self).exec())
+        row.addWidget(mail)
+        row.addWidget(donate)
+        right.addLayout(row)
+        fl.addLayout(right)
+
+        central = QWidget()
+        v = QVBoxLayout(central)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        v.addWidget(t, 1)
+        v.addWidget(footer)
+        self.setCentralWidget(central)
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self.icon, self)
         m = QMenu()
-        m.addAction("Show JDM", self.show_normal)
-        m.addAction("Add URL…", self.add_dialog)
-        m.addAction("Pause All", lambda: self.engine.stop_all())
+        m.addAction(T("Show JDM"), self.show_normal)
+        m.addAction(T("Add URL…"), self.add_dialog)
+        m.addAction(T("Pause All"), lambda: self.engine.stop_all())
         m.addSeparator()
-        m.addAction("Exit", self.quit)
+        m.addAction(T("Exit"), self.quit)
         self.tray.setContextMenu(m)
         self.tray.setToolTip(APP_NAME)
         self.tray.activated.connect(
@@ -385,9 +563,8 @@ class MainWindow(QMainWindow):
             self.tray.show()
 
     # ---- helpers
-    def _flash(self, text, ms=0):
-        self.copyright_label.setText("  " + text)
-        QTimer.singleShot(ms or 8000, lambda: self.copyright_label.setText("  " + COPYRIGHT))
+    def _flash(self, text, ms=8000):
+        self.statusBar().showMessage(text, ms)
 
     def show_normal(self):
         self.show()
@@ -400,6 +577,38 @@ class MainWindow(QMainWindow):
                if i.row() < len(self._rows)}
         return [d for d in self.engine.downloads if d.id in ids]
 
+    # ---- open / play
+    def open_download(self, d, external=False):
+        if not d.path or not os.path.exists(d.path):
+            QMessageBox.warning(self, APP_NAME, T("File not found. It may have been moved or deleted."))
+            return
+        if not external and player.media_kind(d.path):
+            try:
+                v = player.MediaViewer(self, d.path, open_path)
+                if is_rtl():
+                    v.setLayoutDirection(Qt.LeftToRight)   # player controls read left→right
+                v.show()
+                self._viewers.append(v)
+                v.destroyed.connect(lambda *_: self._viewers.remove(v) if v in self._viewers else None)
+                return
+            except Exception:  # noqa: BLE001  (no multimedia backend) -> system player
+                pass
+        open_path(d.path)
+
+    def _make_open_button(self, d):
+        kind = player.media_kind(d.path)
+        text = {"video": "Play", "audio": "Play", "image": "View"}.get(kind, "Open")
+        icon = QStyle.SP_MediaPlay if kind in ("video", "audio") else QStyle.SP_DialogOpenButton
+        b = QPushButton(self.style().standardIcon(icon), T(text))
+        b.setStyleSheet(OPEN_BTN_CSS)
+        b.setCursor(Qt.PointingHandCursor)
+        b.clicked.connect(lambda: self.open_download(d))
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(6, 2, 6, 2)
+        lay.addWidget(b)
+        return w
+
     # ---- actions
     def add_dialog(self, url="", filename="", headers=None, from_browser=False, quality=""):
         if not url:
@@ -409,13 +618,13 @@ class MainWindow(QMainWindow):
         if from_browser and not self.settings["ask_on_browser_download"]:
             self.engine.add(url, filename=filename or None, headers=headers,
                             quality=quality if quality in E.QUALITIES else "Best quality")
-            self.tray.showMessage(APP_NAME, f"Download added:\n{filename or url}",
+            self.tray.showMessage(APP_NAME, f"{T('Download added:')}\n{filename or url}",
                                   QSystemTrayIcon.Information, 3000)
             return
         self.show_normal()
         dlg = AddDialog(self, self.settings, url, filename)
         if quality in E.QUALITIES:
-            dlg.quality.setCurrentText(quality)
+            dlg.quality.setCurrentIndex(max(0, dlg.quality.findData(quality)))
         dlg.setWindowFlag(Qt.WindowStaysOnTopHint, from_browser)
         if dlg.exec() == QDialog.Accepted:
             video = dlg.is_video
@@ -423,7 +632,7 @@ class MainWindow(QMainWindow):
                             None if video else (dlg.name.text().strip() or None),
                             dlg.conn.value(), headers, status=dlg.choice,
                             kind="video" if video else "file",
-                            quality=dlg.quality.currentText())
+                            quality=dlg.quality.currentData())
             self._refresh(full=True)
 
     def resume_selected(self):
@@ -446,9 +655,9 @@ class MainWindow(QMainWindow):
         if not items:
             return
         box = QMessageBox(self)
-        box.setWindowTitle("Delete")
-        box.setText(f"Remove {len(items)} download(s) from the list?")
-        also = QCheckBox("Also delete the file(s) from disk")
+        box.setWindowTitle(T("Delete"))
+        box.setText(T("Remove {n} download(s) from the list?", n=len(items)))
+        also = QCheckBox(T("Also delete the file(s) from disk"))
         box.setCheckBox(also)
         box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         if box.exec() == QMessageBox.Yes:
@@ -457,11 +666,25 @@ class MainWindow(QMainWindow):
             self._refresh(full=True)
 
     def settings_dialog(self):
+        old_lang = self.settings.get("language") or "en"
         dlg = SettingsDialog(self, self.settings)
         if dlg.exec() == QDialog.Accepted:
             dlg.apply()
             self.engine.set_speed_limit_kb(self.settings["speed_limit_kb"])
             save_settings(self.settings)
+            new_lang = self.settings.get("language") or "en"
+            if new_lang != old_lang:
+                set_language(new_lang)
+                if QMessageBox.question(self, APP_NAME, T("Restart JDM now to apply the new language?")) \
+                        == QMessageBox.Yes:
+                    self.restart()
+
+    def restart(self):
+        self._quitting = True
+        self._shutdown()
+        args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
+        QProcess.startDetached(sys.executable, [a for a in args if a != "--minimized"])
+        QApplication.quit()
 
     def scheduler_dialog(self):
         dlg = SchedulerDialog(self, self.settings["scheduler"])
@@ -473,20 +696,13 @@ class MainWindow(QMainWindow):
         path = extension_dir()
         QGuiApplication.clipboard().setText(path)
         box = QMessageBox(self)
-        box.setWindowTitle("Add JDM to Chrome / Edge")
+        box.setWindowTitle(T("Add JDM to Chrome / Edge"))
         box.setTextFormat(Qt.RichText)
-        box.setText(
-            "<b>Install the JDM browser extension (one time only):</b><ol>"
-            "<li>Chrome will open the <b>Extensions</b> page.</li>"
-            "<li>Turn on <b>Developer mode</b> (top-right).</li>"
-            "<li>Click <b>Load unpacked</b>.</li>"
-            "<li>Paste this folder path (already copied) and click <b>Select Folder</b>:<br>"
-            f"<code>{path}</code></li></ol>"
-            "After that, downloads and YouTube videos go to JDM automatically.")
-        chrome = box.addButton("Open Chrome", QMessageBox.AcceptRole)
-        edge = box.addButton("Open Edge", QMessageBox.AcceptRole)
-        box.addButton("Open Folder", QMessageBox.HelpRole).clicked.connect(lambda: open_path(path))
-        box.addButton(QMessageBox.Close)
+        box.setText(T("EXT_HELP", path=path))
+        chrome = box.addButton(T("Open Chrome"), QMessageBox.AcceptRole)
+        edge = box.addButton(T("Open Edge"), QMessageBox.AcceptRole)
+        box.addButton(T("Open Folder"), QMessageBox.HelpRole).clicked.connect(lambda: open_path(path))
+        box.addButton(T("Close"), QMessageBox.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if sys.platform.startswith("win") and clicked in (chrome, edge):
@@ -496,14 +712,23 @@ class MainWindow(QMainWindow):
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
     def about(self):
-        QMessageBox.about(self, "About", f"<b>{APP_NAME}</b> {VERSION}<br>{COPYRIGHT}<br><br>"
-                          f"Email: <a href='mailto:{CONTACT_EMAIL}'>{CONTACT_EMAIL}</a><br>"
-                          f"Phone: {CONTACT_PHONE}<br><br>"
-                          "Free download manager – no serial, no activation.<br>"
-                          "Multi-connection downloads, pause/resume, scheduler, "
-                          "speed limiter, browser capture and video downloads.<br><br>"
-                          f"FFmpeg: {'found' if self.settings.get('ffmpeg_path') else 'not found'}<br>"
-                          f"Deno: {'found' if self.settings.get('deno_path') else 'not found'}")
+        box = QMessageBox(self)
+        box.setWindowTitle(T("About"))
+        box.setIconPixmap(iraq_flag(66, 44))
+        box.setTextFormat(Qt.RichText)
+        ff = T("found") if self.settings.get("ffmpeg_path") else T("not found")
+        dd = T("found") if self.settings.get("deno_path") else T("not found")
+        box.setText(
+            f"<b>{APP_NAME}</b> {VERSION}<br>{copyright_text()}<br><br>"
+            f"{T('Email:')} <a href='mailto:{CONTACT_EMAIL}'>{CONTACT_EMAIL}</a><br><br>"
+            f"{T('Free download manager – no serial, no activation.')}<br>"
+            f"{T('Multi-connection downloads, pause/resume, scheduler, speed limiter, browser capture, video downloads and a built-in media player.')}"
+            f"<br><br>FFmpeg: {ff}<br>Deno: {dd}")
+        donate = box.addButton("♥ " + T("Donate"), QMessageBox.ActionRole)
+        box.addButton(T("Close"), QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is donate:
+            DonateDialog(self).exec()
 
     def _context_menu(self, pos):
         items = self.selected()
@@ -512,32 +737,35 @@ class MainWindow(QMainWindow):
         d = items[0]
         m = QMenu(self)
         if d.status == E.COMPLETED:
-            m.addAction("Open", lambda: open_path(d.path))
-            m.addAction("Open Folder", lambda: show_in_folder(d.path))
-            m.addAction("Download Again", lambda: self.engine.redownload(d))
+            if player.media_kind(d.path):
+                m.addAction(T("Play in JDM"), lambda: self.open_download(d))
+            else:
+                m.addAction(T("Open"), lambda: self.open_download(d))
+            m.addAction(T("Open with default program"), lambda: self.open_download(d, external=True))
+            m.addAction(T("Open Folder"), lambda: show_in_folder(d.path))
+            m.addAction(T("Download Again"), lambda: self.engine.redownload(d))
         else:
-            m.addAction("Resume", self.resume_selected)
-            m.addAction("Pause", self.pause_selected)
-            m.addAction("Move to Schedule", self.schedule_selected)
-            m.addAction("Open Folder", lambda: open_path(d.save_dir))
-        m.addAction("Copy URL", lambda: QGuiApplication.clipboard().setText(d.url))
+            m.addAction(T("Resume"), self.resume_selected)
+            m.addAction(T("Pause"), self.pause_selected)
+            m.addAction(T("Move to Schedule"), self.schedule_selected)
+            m.addAction(T("Open Folder"), lambda: open_path(d.save_dir))
+        m.addAction(T("Copy URL"), lambda: QGuiApplication.clipboard().setText(d.url))
         if d.error:
-            m.addAction("Show Error", lambda: QMessageBox.warning(self, "Error", d.error))
+            m.addAction(T("Show Error"), lambda: QMessageBox.warning(self, T("Error"), d.error))
         m.addSeparator()
-        m.addAction("Delete", self.delete_selected)
+        m.addAction(T("Delete"), self.delete_selected)
         m.exec(self.table.viewport().mapToGlobal(pos))
 
     def _double_click(self, index):
         if index.row() < len(self._rows):
             d = self.engine.get(self._rows[index.row()])
-            if d and d.status == E.COMPLETED and os.path.exists(d.path):
-                open_path(d.path)
+            if d and d.status == E.COMPLETED:
+                self.open_download(d)
             elif d and d.status in (E.PAUSED, E.ERROR):
                 self.engine.resume(d)
 
     # ---- periodic work
     def _tick(self):
-        # browser / second-instance events
         while not bridge.events.empty():
             kind, data = bridge.events.get_nowait()
             if kind == "show":
@@ -567,14 +795,14 @@ class MainWindow(QMainWindow):
         if hm == sc["start"] and self._fired.get("start") != today:
             self._fired["start"] = today
             self.engine.start_scheduled()
-            self._flash("Scheduler: scheduled downloads started", 8000)
+            self._flash(T("Scheduler: scheduled downloads started"))
         if sc["stop_enabled"] and hm == sc["stop"] and self._fired.get("stop") != today:
             self._fired["stop"] = today
             for d in self.engine.downloads:
                 if d.status in (E.DOWNLOADING, E.QUEUED):
                     d.stop(E.SCHEDULED)
             self.engine.request_save()
-            self._flash("Scheduler: downloads stopped", 8000)
+            self._flash(T("Scheduler: downloads stopped"))
 
     def _refresh(self, full=False):
         items = list(self.engine.downloads)
@@ -582,17 +810,20 @@ class MainWindow(QMainWindow):
         if full or ids != self._rows:
             sel = {d.id for d in self.selected()} if self._rows else set()
             self.table.setRowCount(len(items))
+            self._action_state = {}
             for r, d in enumerate(items):
                 for c in range(len(COLS)):
-                    if c == 2:
+                    if c == C_PROG:
                         bar = QProgressBar()
                         bar.setRange(0, 1000)
                         bar.setTextVisible(True)
                         bar.setAlignment(Qt.AlignCenter)
                         self.table.setCellWidget(r, c, bar)
+                    elif c == C_ACTION:
+                        self.table.removeCellWidget(r, c)
                     else:
                         it = QTableWidgetItem()
-                        if c in (1, 3, 4, 6):
+                        if c in (C_SIZE, C_SPEED, C_ETA, C_CONN):
                             it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                         self.table.setItem(r, c, it)
             self._rows = ids
@@ -605,33 +836,41 @@ class MainWindow(QMainWindow):
             icon = {E.COMPLETED: QStyle.SP_DialogApplyButton, E.ERROR: QStyle.SP_MessageBoxCritical,
                     E.PAUSED: QStyle.SP_MediaPause, E.DOWNLOADING: QStyle.SP_ArrowDown,
                     E.SCHEDULED: QStyle.SP_BrowserReload}.get(d.status, QStyle.SP_FileIcon)
-            it = self.table.item(r, 0)
+            it = self.table.item(r, C_NAME)
             it.setText(d.filename)
             it.setIcon(st.standardIcon(icon))
-            it.setToolTip(d.url + (f"\n\nError: {d.error}" if d.error else ""))
-            self.table.item(r, 1).setText(E.human_size(d.size))
-            bar = self.table.cellWidget(r, 2)
+            it.setToolTip(d.url + (f"\n\n{T('Error')}: {d.error}" if d.error else ""))
+            self.table.item(r, C_SIZE).setText(T("Unknown") if d.size is None or d.size < 0
+                                               else ltr(E.human_size(d.size)))
+            bar = self.table.cellWidget(r, C_PROG)
             p = d.progress()
             bar.setValue(int(p * 10))
-            bar.setFormat(f"{p:.1f}%" if d.size > 0 else E.human_size(d.downloaded))
-            self.table.item(r, 3).setText(E.human_size(d.speed) + "/s" if running else "")
-            self.table.item(r, 4).setText(E.human_time(d.eta()) if running else "")
-            self.table.item(r, 5).setText(d.status)
-            self.table.item(r, 6).setText(str(d.live_connections) if running else "")
-            self.table.item(r, 7).setText(
-                datetime.datetime.fromtimestamp(d.added).strftime("%Y-%m-%d %H:%M"))
-            # completion notification
+            bar.setFormat(ltr(f"{p:.1f}%" if d.size > 0 else E.human_size(d.downloaded)))
+            self.table.item(r, C_SPEED).setText(ltr(E.human_size(d.speed) + "/s") if running else "")
+            self.table.item(r, C_ETA).setText(ltr(E.human_time(d.eta())) if running else "")
+            self.table.item(r, C_STATUS).setText(T(d.status))
+            self.table.item(r, C_CONN).setText(str(d.live_connections) if running else "")
+            self.table.item(r, C_ADDED).setText(
+                ltr(datetime.datetime.fromtimestamp(d.added).strftime("%Y-%m-%d %H:%M")))
+            # "Open / Play" button for finished files
+            state = (d.id, d.status, d.path)
+            if self._action_state.get(r) != state:
+                self._action_state[r] = state
+                if d.status == E.COMPLETED:
+                    self.table.setCellWidget(r, C_ACTION, self._make_open_button(d))
+                else:
+                    self.table.removeCellWidget(r, C_ACTION)
             prev = self._last_status.get(d.id)
             if prev and prev != E.COMPLETED and d.status == E.COMPLETED \
                     and self.settings["notify_on_complete"]:
-                self.tray.showMessage("Download complete", d.filename,
+                self.tray.showMessage(T("Download complete"), d.filename,
                                       QSystemTrayIcon.Information, 4000)
             self._last_status[d.id] = d.status
         total = self.engine.total_speed()
         active = sum(1 for d in items if d.status == E.DOWNLOADING)
-        self.speed_label.setText(f"  {active} active  |  {E.human_size(total)}/s  ")
+        self.speed_label.setText(f"  {T('{n} active', n=active)}  |  {ltr(E.human_size(total) + '/s')}  ")
         lim = self.settings["speed_limit_kb"]
-        self.limit_label.setText(f"Limit: {lim} KB/s" if lim else "No speed limit")
+        self.limit_label.setText(T("Limit: {n} KB/s", n=lim) if lim else T("No speed limit"))
 
     # ---- window lifecycle
     def closeEvent(self, ev):
@@ -642,7 +881,7 @@ class MainWindow(QMainWindow):
             if not self.settings.get("_tray_hint_shown"):
                 self.settings["_tray_hint_shown"] = True
                 save_settings(self.settings)
-                self.tray.showMessage(APP_NAME, "JDM is still running in the tray.",
+                self.tray.showMessage(APP_NAME, T("JDM is still running in the tray."),
                                       QSystemTrayIcon.Information, 3000)
             return
         self._shutdown()
@@ -654,10 +893,16 @@ class MainWindow(QMainWindow):
         self.close()
 
     def _shutdown(self):
+        if getattr(self, "_down", False):
+            return
+        self._down = True
         self.timer.stop()
+        for v in list(self._viewers):
+            v.close()
         self.engine.shutdown()
         if self.server:
             self.server.shutdown()
+            self.server.server_close()
         self.tray.hide()
 
 
@@ -671,6 +916,15 @@ def main():
     app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
     settings = load_settings()
+    if not settings.get("language") and "--minimized" not in args:
+        dlg = LanguageDialog()
+        dlg.setWindowIcon(QIcon(resource(os.path.join("assets", "jdm.ico"))))
+        dlg.exec()
+        settings["language"] = dlg.choice
+        save_settings(settings)
+    set_language(settings.get("language") or "en")
+    if is_rtl():
+        app.setLayoutDirection(Qt.RightToLeft)
     settings["ffmpeg_path"] = find_tool("ffmpeg")
     settings["deno_path"] = find_tool("deno")
     w = MainWindow(settings, start_hidden="--minimized" in args)
