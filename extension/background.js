@@ -1,4 +1,4 @@
-// JDM Browser Integration - hands downloads over to the JDM desktop app.
+// Maria Free Download - browser integration (hands downloads to the desktop app).
 const APP = "http://127.0.0.1:9614";
 const bypass = new Set();   // URLs the browser should download itself (fallback)
 
@@ -74,12 +74,12 @@ chrome.downloads.onCreated.addListener(async (item) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "jdm-link",
-    title: "Download with JDM",
+    title: "Download with Maria Free Download",
     contexts: ["link", "video", "audio", "image"],
   });
   chrome.contextMenus.create({
     id: "jdm-page",
-    title: "Download this page's video with JDM",
+    title: "Download this page's video with Maria Free Download",
     contexts: ["page"],
   });
 });
@@ -97,7 +97,7 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg && msg.type === "jdm-video") {
     (async () => {
-      if (!(await appAlive())) return reply({ ok: false, reason: "JDM is not running" });
+      if (!(await appAlive())) return reply({ ok: false, reason: "Maria Free Download is not running" });
       reply({ ok: await sendToApp(msg.url, "", (sender.tab && sender.tab.url) || msg.url, msg.quality) });
     })();
     return true;

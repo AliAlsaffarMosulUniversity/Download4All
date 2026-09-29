@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "JDM Browser Integration",
-  "version": "1.3.0",
-  "description": "Sends browser downloads to Jazira Download Manager (JDM).",
+  "name": "Maria Free Download – Browser Integration",
+  "version": "1.7.0",
+  "description": "Sends browser downloads and videos to Maria Free Download.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -39,6 +39,5 @@
       "run_at": "document_idle",
       "all_frames": true
     }
-  ],
-  "author": "Ali Abdulwahab Al-Saffar"
+  ]
 }

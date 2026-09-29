@@ -51,7 +51,7 @@
   </style>
   <div class="wrap">
     <div class="pill">
-      <button class="main" title="Download this video with JDM">
+      <button class="main" title="Download this video with Maria Free Download">
         <span class="icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0c4a5c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M6.5 10.5 12 16l5.5-5.5"/><path d="M5 20h14"/></svg></span>
         Download Now
       </button>
@@ -165,16 +165,16 @@
     busy = true;
     wrap.classList.remove("open");
     toast.className = "toast ok";
-    toast.textContent = "Sending to JDM…";
+    toast.textContent = "Sending to Maria…";
     try {
       chrome.runtime.sendMessage({ type: "jdm-video", url, quality, title: document.title }, (r) => {
         busy = false;
         if (chrome.runtime.lastError || !r || !r.ok) {
           toast.className = "toast err";
-          toast.textContent = (r && r.reason) || "Open JDM first";
+          toast.textContent = (r && r.reason) || "Open Maria Free Download first";
         } else {
           toast.className = "toast ok";
-          toast.textContent = "✓ Added to JDM";
+          toast.textContent = "✓ Added to Maria";
         }
         setTimeout(() => { toast.className = "toast"; scheduleHide(); }, 2200);
       });

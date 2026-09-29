@@ -14,8 +14,7 @@ AR = {
     "Open Folder": "فتح المجلد",
     "Browser": "المتصفح",
     "About": "حول",
-    "Donate": "تبرّع",
-    "Show JDM": "إظهار البرنامج",
+    "Show Maria Free Download": "إظهار البرنامج",
     "Add URL…": "إضافة رابط…",
     "Exit": "خروج",
     # columns
@@ -40,7 +39,7 @@ AR = {
     "Open": "فتح",
     "Play": "تشغيل",
     "View": "عرض",
-    "Play in JDM": "تشغيل داخل البرنامج",
+    "Play in Maria": "تشغيل داخل البرنامج",
     "Open with default program": "فتح بالبرنامج الافتراضي",
     "Download Again": "تحميل مرة أخرى",
     "Move to Schedule": "نقل إلى الجدولة",
@@ -57,7 +56,7 @@ AR = {
     "Browse…": "استعراض…",
     "Automatic (from server)": "تلقائي (من الخادم)",
     "Taken from the video title": "يؤخذ من عنوان الفيديو",
-    "Video page detected – JDM will download the video itself.":
+    "Video page detected – Maria will download the video itself.":
         "تم اكتشاف صفحة فيديو – سيحمّل البرنامج الفيديو نفسه.",
     "Download Now": "تحميل الآن",
     "Add to Schedule": "إضافة للجدولة",
@@ -68,6 +67,11 @@ AR = {
     "Audio only (M4A)": "صوت فقط (M4A)",
     # settings
     "Language:": "اللغة:",
+    "Theme:": "المظهر:",
+    "Light (white)": "الوضع النهاري (أبيض)",
+    "Dark (black)": "الوضع الليلي (أسود)",
+    "Dark mode": "الوضع الليلي",
+    "Light mode": "الوضع النهاري",
     "Default folder:": "مجلد التحميل:",
     "Download folder": "مجلد التحميل",
     "Connections per file:": "الاتصالات لكل ملف:",
@@ -76,8 +80,8 @@ AR = {
     "Unlimited": "غير محدود",
     "Show 'Add Download' window for browser downloads": "إظهار نافذة الإضافة عند التحميل من المتصفح",
     "Notify when a download completes": "التنبيه عند اكتمال التحميل",
-    "Closing the window keeps JDM running in the tray": "إبقاء البرنامج يعمل بجانب الساعة عند إغلاق النافذة",
-    "Restart JDM now to apply the new language?": "إعادة تشغيل البرنامج الآن لتطبيق اللغة الجديدة؟",
+    "Closing the window keeps Maria Free Download running in the tray": "إبقاء البرنامج يعمل بجانب الساعة عند إغلاق النافذة",
+    "Restart Maria Free Download now to apply the new language?": "إعادة تشغيل البرنامج الآن لتطبيق اللغة الجديدة؟",
     "Choose the program language": "اختر لغة البرنامج",
     # scheduler
     "Enable scheduler": "تفعيل الجدولة",
@@ -101,17 +105,8 @@ AR = {
     # notifications
     "Download complete": "اكتمل التحميل",
     "Download added:": "تمت إضافة التحميل:",
-    "JDM is still running in the tray.": "البرنامج ما زال يعمل بجانب الساعة.",
+    "Maria Free Download is still running in the tray.": "البرنامج ما زال يعمل بجانب الساعة.",
     "Made in Mosul, Iraq": "صُنع في الموصل، العراق",
-    # donate
-    "Support free service software": "ادعم تصميم البرامج الخدمية المجانية",
-    "JDM is free. If it helped you, you can support the design of more free service software.":
-        "هذا البرنامج مجاني. إذا أفادك، يمكنك دعم تصميم المزيد من البرامج الخدمية المجانية.",
-    "MasterCard number:": "رقم الماستر كارد:",
-    "Copy number": "نسخ الرقم",
-    "Copied": "تم النسخ",
-    "Thank you for your support": "شكراً لدعمك",
-    "Close": "إغلاق",
     # about / extension help
     "Email:": "البريد الإلكتروني:",
     "found": "موجود",
@@ -119,7 +114,7 @@ AR = {
     "Free download manager – no serial, no activation.": "برنامج تحميل مجاني – بدون رقم تسلسلي أو تفعيل.",
     "Multi-connection downloads, pause/resume, scheduler, speed limiter, browser capture, video downloads and a built-in media player.":
         "تحميل متعدد الاتصالات، إيقاف واستئناف، جدولة، تحديد السرعة، التقاط من المتصفح، تحميل الفيديو، ومشغّل وسائط مدمج.",
-    "Add JDM to Chrome / Edge": "إضافة البرنامج إلى Chrome و Edge",
+    "Add Maria Free Download to Chrome / Edge": "إضافة البرنامج إلى Chrome و Edge",
     "Open Chrome": "فتح Chrome",
     "Open Edge": "فتح Edge",
     "EXT_HELP": (
@@ -141,14 +136,18 @@ AR = {
 }
 
 EN = {
+    "Dark mode": "Night mode",
+    "Light mode": "Day mode",
+    "Light (white)": "Day mode (white)",
+    "Dark (black)": "Night mode (black)",
     "EXT_HELP": (
-        "<b>Install the JDM browser extension (one time only):</b><ol>"
+        "<b>Install the Maria Free Download browser extension (one time only):</b><ol>"
         "<li>The browser will open the <b>Extensions</b> page.</li>"
         "<li>Turn on <b>Developer mode</b> (top-right).</li>"
         "<li>Click <b>Load unpacked</b>.</li>"
         "<li>Paste this folder path (already copied) and click <b>Select Folder</b>:<br>"
         "<code>{path}</code></li></ol>"
-        "After that, downloads and YouTube videos go to JDM automatically."),
+        "After that, downloads and YouTube videos go to Maria Free Download automatically."),
 }
 
 

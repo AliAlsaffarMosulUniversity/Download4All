@@ -20,8 +20,8 @@ const DEFAULTS = { enabled: true, minSizeKB: 0, skipExt: "", hoverButton: true }
     const r = await fetch("http://127.0.0.1:9614/ping", { signal: AbortSignal.timeout(800) });
     const j = await r.json();
     if (j.app !== "JDM") throw new Error();
-    st.innerHTML = '<span class="on">●</span> JDM is running';
+    st.innerHTML = '<span class="on">●</span> Maria Free Download is running';
   } catch (e) {
-    st.innerHTML = '<span class="off">●</span> JDM is not running';
+    st.innerHTML = '<span class="off">●</span> Maria Free Download is not running';
   }
 })();

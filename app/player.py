@@ -1,4 +1,4 @@
-"""Built-in viewer: plays video & audio and shows images inside JDM."""
+"""Built-in viewer: plays video & audio and shows images inside Maria Free Download."""
 import os
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl

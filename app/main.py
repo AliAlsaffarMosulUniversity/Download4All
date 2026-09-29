@@ -1,4 +1,4 @@
-"""Jazira Download Manager (JDM) - free, open download manager. No license, no activation."""
+"""Maria Free Download - free, open download manager. No license, no activation."""
 import datetime
 import json
 import os
@@ -6,8 +6,8 @@ import subprocess
 import sys
 
 from PySide6.QtCore import QProcess, QSize, Qt, QTime, QTimer, QUrl
-from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QGuiApplication, QIcon,
-                           QKeySequence, QPainter, QPixmap)
+from PySide6.QtGui import (QAction, QBrush, QColor, QDesktopServices, QFont, QGuiApplication, QIcon,
+                           QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
@@ -20,12 +20,11 @@ import engine as E
 import player
 from i18n import T, is_rtl, set_language
 
-APP_NAME = "Jazira Download Manager"
-VERSION = "1.3.0"
+APP_NAME = "Maria Free Download"
+VERSION = "1.7.0"
 CONTACT_EMAIL = "alsfarly2@gmail.com"
-DONATE_MASTERCARD = "2144558406"
-COPYRIGHT_EN = "© 2026 All rights reserved to the programmer Ali Abdulwahab Al-Saffar – Mosul, Iraq"
-COPYRIGHT_AR = "© 2026 جميع الحقوق محفوظة للمبرمج علي عبد الوهاب الصفار – الموصل، العراق"
+COPYRIGHT_EN = "© 2026 Maria Free Download – All rights reserved – Mosul, Iraq"
+COPYRIGHT_AR = "© 2026 جميع الحقوق محفوظة – الموصل، العراق"
 
 
 def ltr(text):
@@ -71,6 +70,7 @@ def extension_dir():
 
 DEFAULTS = {
     "language": "",
+    "theme": "light",
     "download_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
     "connections": 8,
     "max_concurrent": 3,
@@ -114,6 +114,120 @@ def show_in_folder(path):
         subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
     else:
         open_path(os.path.dirname(path))
+
+
+# ---------------------------------------------------------------- light / dark theme
+DARK = {
+    "window": "#1b1e23", "base": "#14161a", "alt": "#1f232a", "text": "#e6e8eb",
+    "button": "#2a2f37", "mid": "#3a404a", "dim": "#8b939e", "link": "#38bdf8",
+    "footer": "#16191d", "footer_border": "#2c3139", "footer_text": "#9aa3ad",
+}
+LIGHT_FOOTER = {"footer": "#f4f6f8", "footer_border": "#dde3e8", "footer_text": "#5b6470"}
+
+
+def apply_theme(app, theme):
+    """Switch the whole program between the white (light) and black (dark) look."""
+    app.setStyle("Fusion")
+    if theme == "dark":
+        c = {k: QColor(v) for k, v in DARK.items()}
+        p = QPalette()
+        p.setColor(QPalette.Window, c["window"])
+        p.setColor(QPalette.WindowText, c["text"])
+        p.setColor(QPalette.Base, c["base"])
+        p.setColor(QPalette.AlternateBase, c["alt"])
+        p.setColor(QPalette.ToolTipBase, c["button"])
+        p.setColor(QPalette.ToolTipText, c["text"])
+        p.setColor(QPalette.PlaceholderText, c["dim"])
+        p.setColor(QPalette.Text, c["text"])
+        p.setColor(QPalette.Button, c["button"])
+        p.setColor(QPalette.ButtonText, c["text"])
+        p.setColor(QPalette.BrightText, QColor("#ff6b6b"))
+        p.setColor(QPalette.Link, c["link"])
+        p.setColor(QPalette.Highlight, QColor("#0e7490"))
+        p.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+        p.setColor(QPalette.Light, c["mid"])
+        p.setColor(QPalette.Midlight, c["button"])
+        p.setColor(QPalette.Mid, c["mid"])
+        p.setColor(QPalette.Dark, QColor("#0f1114"))
+        p.setColor(QPalette.Shadow, QColor("#000000"))
+        for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+            p.setColor(QPalette.Disabled, role, c["dim"])
+        app.setPalette(p)
+        app.setStyleSheet("QToolTip { color: #e6e8eb; background: #2a2f37; border: 1px solid #3a404a; }")
+    else:
+        app.setPalette(app.style().standardPalette())
+        app.setStyleSheet("")
+    try:   # Qt 6.8+: dark / light window title bar on Windows 10/11
+        app.styleHints().setColorScheme(Qt.ColorScheme.Dark if theme == "dark" else Qt.ColorScheme.Light)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def footer_css(theme):
+    c = DARK if theme == "dark" else LIGHT_FOOTER
+    return (f"#footer {{ background: {c['footer']}; border-top: 1px solid {c['footer_border']}; }}"
+            f"#footer QLabel {{ color: {c['footer_text']}; }}")
+
+
+def theme_icon(kind, color):
+    """Small moon / sun icon drawn in code."""
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    col = QColor(color)
+    if kind == "moon":
+        p.setBrush(col)
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(10, 8, 46, 46)
+        p.setCompositionMode(QPainter.CompositionMode_Clear)
+        p.drawEllipse(26, 0, 42, 42)
+    else:
+        p.setBrush(col)
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(20, 20, 24, 24)
+        pen = QPen(col, 5, Qt.SolidLine, Qt.RoundCap)
+        p.setPen(pen)
+        import math
+        for i in range(8):
+            a = i * math.pi / 4
+            p.drawLine(int(32 + 18 * math.cos(a)), int(32 + 18 * math.sin(a)),
+                       int(32 + 27 * math.cos(a)), int(32 + 27 * math.sin(a)))
+    p.end()
+    return QIcon(pm)
+
+
+def media_icon(kind, color):
+    """Play / pause / stop icons drawn in the theme colour (standard ones are black)."""
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(color))
+    if kind == "play":
+        from PySide6.QtCore import QPointF
+        from PySide6.QtGui import QPolygonF
+        p.drawPolygon(QPolygonF([QPointF(18, 10), QPointF(54, 32), QPointF(18, 54)]))
+    elif kind == "pause":
+        p.drawRoundedRect(16, 12, 11, 40, 3, 3)
+        p.drawRoundedRect(37, 12, 11, 40, 3, 3)
+    else:
+        p.drawRoundedRect(15, 15, 34, 34, 4, 4)
+    p.end()
+    return QIcon(pm)
+
+
+def logo_pixmap(size):
+    """The round Maria Free Download logo, scaled smoothly."""
+    pm = QPixmap(resource(os.path.join("assets", "logo.png")))
+    if pm.isNull():
+        return QPixmap()
+    pm.setDevicePixelRatio(1)
+    ratio = QGuiApplication.primaryScreen().devicePixelRatio() if QGuiApplication.primaryScreen() else 1
+    out = pm.scaled(int(size * ratio), int(size * ratio), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    out.setDevicePixelRatio(ratio)
+    return out
 
 
 def iraq_flag(width=30, height=20):
@@ -164,7 +278,7 @@ class AddDialog(QDialog):
         for q in E.QUALITIES:
             self.quality.addItem(T(q), q)
         self.quality_label = QLabel(T("Video quality:"))
-        self.video_hint = QLabel(T("Video page detected – JDM will download the video itself."))
+        self.video_hint = QLabel(T("Video page detected – Maria will download the video itself."))
         self.video_hint.setStyleSheet("color: #0e7490; font-weight: bold")
         form = QFormLayout()
         form.addRow(T("URL:"), self.url)
@@ -221,6 +335,10 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(T("Settings"))
         self.setMinimumWidth(480)
         self.s = s
+        self.theme = QComboBox()
+        self.theme.addItem(T("Light (white)"), "light")
+        self.theme.addItem(T("Dark (black)"), "dark")
+        self.theme.setCurrentIndex(1 if s.get("theme") == "dark" else 0)
         self.lang = QComboBox()
         self.lang.addItem("English", "en")
         self.lang.addItem("العربية", "ar")
@@ -248,10 +366,11 @@ class SettingsDialog(QDialog):
         self.ask.setChecked(bool(s["ask_on_browser_download"]))
         self.notify = QCheckBox(T("Notify when a download completes"))
         self.notify.setChecked(bool(s["notify_on_complete"]))
-        self.tray = QCheckBox(T("Closing the window keeps JDM running in the tray"))
+        self.tray = QCheckBox(T("Closing the window keeps Maria Free Download running in the tray"))
         self.tray.setChecked(bool(s["close_to_tray"]))
         form = QFormLayout()
         form.addRow(T("Language:"), self.lang)
+        form.addRow(T("Theme:"), self.theme)
         form.addRow(T("Default folder:"), row)
         form.addRow(T("Connections per file:"), self.conn)
         form.addRow(T("Simultaneous downloads:"), self.maxc)
@@ -275,6 +394,7 @@ class SettingsDialog(QDialog):
         self.s["notify_on_complete"] = self.notify.isChecked()
         self.s["close_to_tray"] = self.tray.isChecked()
         self.s["language"] = self.lang.currentData()
+        self.s["theme"] = self.theme.currentData()
 
 
 class SchedulerDialog(QDialog):
@@ -322,68 +442,14 @@ class SchedulerDialog(QDialog):
 
 
 # ---------------------------------------------------------------- small dialogs
-class DonateDialog(QDialog):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setWindowTitle(T("Support free service software"))
-        self.setMinimumWidth(430)
-        flag = QLabel()
-        flag.setPixmap(iraq_flag(54, 36))
-        flag.setAlignment(Qt.AlignCenter)
-        title = QLabel(T("Support free service software"))
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0c4a5c;")
-        msg = QLabel(T("JDM is free. If it helped you, you can support the design of more free service software."))
-        msg.setWordWrap(True)
-        msg.setAlignment(Qt.AlignCenter)
-        card = QFrame()
-        card.setStyleSheet("QFrame { background: #f1f7f9; border: 1px solid #cfe3ea; border-radius: 10px; }"
-                           "QLabel { border: none; background: transparent; }")
-        cl = QVBoxLayout(card)
-        lbl = QLabel(T("MasterCard number:"))
-        lbl.setAlignment(Qt.AlignCenter)
-        num = QLabel(DONATE_MASTERCARD)
-        num.setAlignment(Qt.AlignCenter)
-        num.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        num.setStyleSheet("font-size: 24px; font-weight: 700; letter-spacing: 3px; color: #111827;")
-        num.setLayoutDirection(Qt.LeftToRight)
-        cl.addWidget(lbl)
-        cl.addWidget(num)
-        self.copy_btn = QPushButton(T("Copy number"))
-        self.copy_btn.setStyleSheet("QPushButton { background: #0e7490; color: white; border: none; "
-                                    "border-radius: 8px; padding: 8px 18px; font-weight: 600; }"
-                                    "QPushButton:hover { background: #0c5f75; }")
-        self.copy_btn.clicked.connect(self._copy)
-        thanks = QLabel(T("Thank you for your support") + " ♥")
-        thanks.setAlignment(Qt.AlignCenter)
-        thanks.setStyleSheet("color: #6b7280;")
-        close = QPushButton(T("Close"))
-        close.clicked.connect(self.accept)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(self.copy_btn)
-        row.addWidget(close)
-        row.addStretch()
-        lay = QVBoxLayout(self)
-        lay.setSpacing(10)
-        for w in (flag, title, msg, card):
-            lay.addWidget(w)
-        lay.addLayout(row)
-        lay.addWidget(thanks)
-
-    def _copy(self):
-        QGuiApplication.clipboard().setText(DONATE_MASTERCARD)
-        self.copy_btn.setText("✓ " + T("Copied"))
-
-
 class LanguageDialog(QDialog):
     """First run: choose Arabic or English."""
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("JDM – Language / اللغة")
+        self.setWindowTitle("Maria Free Download – Language / اللغة")
         self.choice = "en"
         flag = QLabel()
-        flag.setPixmap(iraq_flag(54, 36))
+        flag.setPixmap(logo_pixmap(120))
         flag.setAlignment(Qt.AlignCenter)
         q = QLabel("Choose the program language\nاختر لغة البرنامج")
         q.setAlignment(Qt.AlignCenter)
@@ -413,13 +479,6 @@ class LanguageDialog(QDialog):
 COLS = ["File Name", "Size", "Progress", "Speed", "Time Left", "Status", "Connections", "Added", "Action"]
 C_NAME, C_SIZE, C_PROG, C_SPEED, C_ETA, C_STATUS, C_CONN, C_ADDED, C_ACTION = range(9)
 
-FOOTER_CSS = """
-#footer { background: #f4f6f8; border-top: 1px solid #dde3e8; }
-#footer QLabel { color: #5b6470; }
-#donate { background: #0e7490; color: white; border: none; border-radius: 11px;
-          padding: 3px 14px; font-weight: 600; }
-#donate:hover { background: #0c5f75; }
-"""
 OPEN_BTN_CSS = ("QPushButton { background: #0e7490; color: white; border: none; border-radius: 5px; "
                 "padding: 2px 10px; font-weight: 600; } QPushButton:hover { background: #0c5f75; }")
 
@@ -477,9 +536,11 @@ class MainWindow(QMainWindow):
             return a
 
         act("Add URL", QStyle.SP_FileDialogNewFolder, self.add_dialog, "Ctrl+N")
-        act("Resume", QStyle.SP_MediaPlay, self.resume_selected)
-        act("Pause", QStyle.SP_MediaPause, self.pause_selected)
-        act("Pause All", QStyle.SP_MediaStop, lambda: self.engine.stop_all())
+        self.media_actions = {
+            "play": act("Resume", QStyle.SP_MediaPlay, self.resume_selected),
+            "pause": act("Pause", QStyle.SP_MediaPause, self.pause_selected),
+            "stop": act("Pause All", QStyle.SP_MediaStop, lambda: self.engine.stop_all()),
+        }
         act("Delete", QStyle.SP_TrashIcon, self.delete_selected, "Del")
         tb.addSeparator()
         act("Scheduler", QStyle.SP_BrowserReload, self.scheduler_dialog)
@@ -488,6 +549,10 @@ class MainWindow(QMainWindow):
             lambda: open_path(self.settings["download_dir"]))
         act("Browser", QStyle.SP_ComputerIcon, self.extension_help)
         tb.addSeparator()
+        self.theme_action = QAction(self)
+        self.theme_action.triggered.connect(self.toggle_theme)
+        tb.addAction(self.theme_action)
+        self._update_theme_action()
         act("About", QStyle.SP_MessageBoxInformation, self.about)
 
     def _build_central(self):
@@ -508,12 +573,17 @@ class MainWindow(QMainWindow):
                 t.setColumnWidth(i, w)
         self.table = t
 
-        # footer: copyright on one side; flag above e-mail + donate on the other
+        # footer: copyright on one side; flag above the e-mail on the other
         footer = QFrame()
         footer.setObjectName("footer")
-        footer.setStyleSheet(FOOTER_CSS)
+        footer.setStyleSheet(footer_css(self.settings.get("theme", "light")))
+        self.footer = footer
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(12, 4, 12, 4)
+        logo = QLabel()
+        logo.setPixmap(logo_pixmap(40))
+        fl.addWidget(logo, 0, Qt.AlignVCenter)
+        fl.addSpacing(6)
         self.copyright_label = QLabel(copyright_text())
         fl.addWidget(self.copyright_label, 1, Qt.AlignVCenter)
         right = QVBoxLayout()
@@ -525,16 +595,12 @@ class MainWindow(QMainWindow):
         right.addWidget(flag, 0, Qt.AlignHCenter)
         row = QHBoxLayout()
         row.setSpacing(10)
-        mail = QLabel(f"<a href='mailto:{CONTACT_EMAIL}' style='color:#0e7490;text-decoration:none'>"
-                      f"✉ {CONTACT_EMAIL}</a>")
+        mail = QLabel()
+        self.mail_label = mail
+        self._set_mail_html()
         mail.setOpenExternalLinks(True)
         mail.setLayoutDirection(Qt.LeftToRight)
-        donate = QPushButton("♥ " + T("Donate"))
-        donate.setObjectName("donate")
-        donate.setCursor(Qt.PointingHandCursor)
-        donate.clicked.connect(lambda: DonateDialog(self).exec())
         row.addWidget(mail)
-        row.addWidget(donate)
         right.addLayout(row)
         fl.addLayout(right)
 
@@ -549,7 +615,7 @@ class MainWindow(QMainWindow):
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self.icon, self)
         m = QMenu()
-        m.addAction(T("Show JDM"), self.show_normal)
+        m.addAction(T("Show Maria Free Download"), self.show_normal)
         m.addAction(T("Add URL…"), self.add_dialog)
         m.addAction(T("Pause All"), lambda: self.engine.stop_all())
         m.addSeparator()
@@ -598,8 +664,9 @@ class MainWindow(QMainWindow):
     def _make_open_button(self, d):
         kind = player.media_kind(d.path)
         text = {"video": "Play", "audio": "Play", "image": "View"}.get(kind, "Open")
-        icon = QStyle.SP_MediaPlay if kind in ("video", "audio") else QStyle.SP_DialogOpenButton
-        b = QPushButton(self.style().standardIcon(icon), T(text))
+        icon = media_icon("play", "#ffffff") if kind in ("video", "audio") \
+            else self.style().standardIcon(QStyle.SP_DialogOpenButton)
+        b = QPushButton(icon, T(text))
         b.setStyleSheet(OPEN_BTN_CSS)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(lambda: self.open_download(d))
@@ -671,13 +738,40 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             dlg.apply()
             self.engine.set_speed_limit_kb(self.settings["speed_limit_kb"])
-            save_settings(self.settings)
+            self.set_theme(self.settings.get("theme", "light"))
             new_lang = self.settings.get("language") or "en"
             if new_lang != old_lang:
                 set_language(new_lang)
-                if QMessageBox.question(self, APP_NAME, T("Restart JDM now to apply the new language?")) \
+                if QMessageBox.question(self, APP_NAME, T("Restart Maria Free Download now to apply the new language?")) \
                         == QMessageBox.Yes:
                     self.restart()
+
+    def _update_theme_action(self):
+        col = "#e6e8eb" if self.settings.get("theme") == "dark" else "#1f2937"
+        for kind, a in self.media_actions.items():
+            a.setIcon(media_icon(kind, col))
+        if self.settings.get("theme") == "dark":
+            self.theme_action.setIcon(theme_icon("sun", "#f5b83d"))
+            self.theme_action.setText(T("Light mode"))
+        else:
+            self.theme_action.setIcon(theme_icon("moon", "#334155"))
+            self.theme_action.setText(T("Dark mode"))
+
+    def _set_mail_html(self):
+        col = "#38bdf8" if self.settings.get("theme") == "dark" else "#0e7490"
+        self.mail_label.setText(f"<a href='mailto:{CONTACT_EMAIL}' style='color:{col};text-decoration:none'>"
+                                f"✉ {CONTACT_EMAIL}</a>")
+
+    def set_theme(self, theme):
+        self.settings["theme"] = theme
+        apply_theme(QApplication.instance(), theme)
+        self.footer.setStyleSheet(footer_css(theme))
+        self._set_mail_html()
+        self._update_theme_action()
+        save_settings(self.settings)
+
+    def toggle_theme(self):
+        self.set_theme("light" if self.settings.get("theme") == "dark" else "dark")
 
     def restart(self):
         self._quitting = True
@@ -696,7 +790,7 @@ class MainWindow(QMainWindow):
         path = extension_dir()
         QGuiApplication.clipboard().setText(path)
         box = QMessageBox(self)
-        box.setWindowTitle(T("Add JDM to Chrome / Edge"))
+        box.setWindowTitle(T("Add Maria Free Download to Chrome / Edge"))
         box.setTextFormat(Qt.RichText)
         box.setText(T("EXT_HELP", path=path))
         chrome = box.addButton(T("Open Chrome"), QMessageBox.AcceptRole)
@@ -714,7 +808,7 @@ class MainWindow(QMainWindow):
     def about(self):
         box = QMessageBox(self)
         box.setWindowTitle(T("About"))
-        box.setIconPixmap(iraq_flag(66, 44))
+        box.setIconPixmap(logo_pixmap(110))
         box.setTextFormat(Qt.RichText)
         ff = T("found") if self.settings.get("ffmpeg_path") else T("not found")
         dd = T("found") if self.settings.get("deno_path") else T("not found")
@@ -724,11 +818,8 @@ class MainWindow(QMainWindow):
             f"{T('Free download manager – no serial, no activation.')}<br>"
             f"{T('Multi-connection downloads, pause/resume, scheduler, speed limiter, browser capture, video downloads and a built-in media player.')}"
             f"<br><br>FFmpeg: {ff}<br>Deno: {dd}")
-        donate = box.addButton("♥ " + T("Donate"), QMessageBox.ActionRole)
         box.addButton(T("Close"), QMessageBox.RejectRole)
         box.exec()
-        if box.clickedButton() is donate:
-            DonateDialog(self).exec()
 
     def _context_menu(self, pos):
         items = self.selected()
@@ -738,7 +829,7 @@ class MainWindow(QMainWindow):
         m = QMenu(self)
         if d.status == E.COMPLETED:
             if player.media_kind(d.path):
-                m.addAction(T("Play in JDM"), lambda: self.open_download(d))
+                m.addAction(T("Play in Maria"), lambda: self.open_download(d))
             else:
                 m.addAction(T("Open"), lambda: self.open_download(d))
             m.addAction(T("Open with default program"), lambda: self.open_download(d, external=True))
@@ -881,7 +972,7 @@ class MainWindow(QMainWindow):
             if not self.settings.get("_tray_hint_shown"):
                 self.settings["_tray_hint_shown"] = True
                 save_settings(self.settings)
-                self.tray.showMessage(APP_NAME, T("JDM is still running in the tray."),
+                self.tray.showMessage(APP_NAME, T("Maria Free Download is still running in the tray."),
                                       QSystemTrayIcon.Information, 3000)
             return
         self._shutdown()
@@ -914,8 +1005,8 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setQuitOnLastWindowClosed(False)
-    app.setStyle("Fusion")
     settings = load_settings()
+    apply_theme(app, settings.get("theme", "light"))
     if not settings.get("language") and "--minimized" not in args:
         dlg = LanguageDialog()
         dlg.setWindowIcon(QIcon(resource(os.path.join("assets", "jdm.ico"))))

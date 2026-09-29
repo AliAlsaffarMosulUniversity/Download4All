@@ -1,5 +1,5 @@
-# Builds JDM.exe + the Windows installer. Called by .github/workflows/build.yml
-param([string]$Version = "1.3.0")
+# Builds MariaFreeDownload.exe + the Windows installer. Called by .github/workflows/build.yml
+param([string]$Version = "1.7.0")
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
@@ -9,13 +9,13 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt pyinstaller;                         Check "pip install"
 python tests/test_engine.py;                                         Check "engine tests"
 
-pyinstaller --noconfirm --clean --windowed --name JDM `
+pyinstaller --noconfirm --clean --windowed --name MariaFreeDownload `
   --icon assets/jdm.ico --add-data "assets;assets" --paths app `
   --collect-all yt_dlp_ejs --hidden-import PySide6.QtMultimedia `
   --hidden-import PySide6.QtMultimediaWidgets app/main.py;                              Check "pyinstaller"
 
 # ---- bundled tools: FFmpeg (merges HD video + audio) and Deno (needed by YouTube)
-$tools = "dist/JDM/tools"
+$tools = "dist/MariaFreeDownload/tools"
 $tmp   = Join-Path $env:RUNNER_TEMP "jdmtools"
 New-Item -ItemType Directory -Force $tools, $tmp | Out-Null
 
