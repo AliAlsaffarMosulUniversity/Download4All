@@ -23,7 +23,7 @@ import updater
 from i18n import T, is_rtl, set_language
 
 APP_NAME = "Maria Free Download"
-VERSION = "1.11.0"
+VERSION = "1.11.1"
 CONTACT_EMAIL = "alsfarly2@gmail.com"
 COPYRIGHT_EN = "© 2026 Maria Free Download – All rights reserved – Mosul, Iraq"
 COPYRIGHT_AR = "© 2026 جميع الحقوق محفوظة – الموصل، العراق"
@@ -751,13 +751,14 @@ def in_category(d, key):
 
 
 class RingGauge(QWidget):
-    """Round progress ring for the sidebar: overall progress of the unfinished downloads."""
+    """Round progress ring for the sidebar, with the Maria emblem in its centre."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(168, 168)
+        self.setFixedSize(196, 236)
         self.value, self.line1, self.line2 = 0.0, "", ""
         self.theme = "light"
+        self.emblem = QPixmap(resource(os.path.join("assets", "emblem.png")))
 
     def set(self, value, line1, line2, theme):
         self.value, self.line1, self.line2, self.theme = value, line1, line2, theme
@@ -765,35 +766,42 @@ class RingGauge(QWidget):
 
     def paintEvent(self, _):
         from PySide6.QtCore import QRectF
-        from PySide6.QtGui import QConicalGradient, QPen
+        from PySide6.QtGui import QConicalGradient
         c = UI["dark" if self.theme == "dark" else "light"]
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        r = QRectF(12, 12, 144, 144)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        cx, cy, rad = 98, 98, 86
+        r = QRectF(cx - rad, cy - rad, 2 * rad, 2 * rad)
         pen = QPen(QColor(c["track"]), 12)
         pen.setCapStyle(Qt.RoundCap)
         p.setPen(pen)
         p.drawArc(r, 0, 360 * 16)
         if self.value > 0:
-            g = QConicalGradient(84, 84, 90)
+            g = QConicalGradient(cx, cy, 90)
             g.setColorAt(0.0, QColor(c["accent"]))
             g.setColorAt(1.0, QColor(c["accent2"]))
             pen = QPen(QBrush(g), 12)
             pen.setCapStyle(Qt.RoundCap)
             p.setPen(pen)
             p.drawArc(r, 90 * 16, -int(min(1.0, self.value) * 360 * 16))
-        p.setPen(QColor(c["text"]))
+        # emblem in the centre
+        if not self.emblem.isNull():
+            d = 96
+            p.drawPixmap(QRectF(cx - d / 2, cy - d / 2 - 14, d, d), self.emblem,
+                         QRectF(self.emblem.rect()))
         f = QFont(self.font())
-        f.setPointSizeF(22)
+        f.setPointSizeF(15)
         f.setBold(True)
         p.setFont(f)
-        p.drawText(QRectF(0, 50, 168, 40), Qt.AlignCenter, f"{int(round(self.value * 100))}%")
-        f.setPointSizeF(8.5)
+        p.setPen(QColor(c["text"]))
+        p.drawText(QRectF(cx - 60, cy + 36, 120, 26), Qt.AlignCenter, f"{int(round(self.value * 100))}%")
+        f.setPointSizeF(9)
         f.setBold(False)
         p.setFont(f)
         p.setPen(QColor(c["dim"]))
-        p.drawText(QRectF(10, 90, 148, 18), Qt.AlignCenter, self.line1)
-        p.drawText(QRectF(10, 107, 148, 18), Qt.AlignCenter, self.line2)
+        p.drawText(QRectF(0, 194, 196, 18), Qt.AlignCenter, self.line1)
+        p.drawText(QRectF(0, 213, 196, 18), Qt.AlignCenter, self.line2)
         p.end()
 
 
