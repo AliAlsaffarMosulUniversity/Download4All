@@ -2,7 +2,7 @@
 ; Build:  ISCC.exe /DMyAppVersion=1.0.0 installer\jdm.iss
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.7.0"
+  #define MyAppVersion "1.11.0"
 #endif
 #define MyAppName "Maria Free Download"
 #define MyAppExe "MariaFreeDownload.exe"
@@ -73,8 +73,25 @@ var
   LoginPage: TInputQueryWizardPage;
   Verified: Boolean;
 
+{ An update over an existing installation does not ask for the name/password again. }
+function IsUpgrade: Boolean;
+var
+  Key: String;
+begin
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6C2B7E51-4A1D-4E8B-9C3F-2D7A51B0E9A4}_is1';
+  Result := RegKeyExists(HKLM, Key) or RegKeyExists(HKCU, Key);
+  if (not Result) and IsWin64 then
+    Result := RegKeyExists(HKLM64, Key) or RegKeyExists(HKLM32, Key);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = LoginPage.ID) and Verified;
+end;
+
 procedure InitializeWizard;
 begin
+  Verified := IsUpgrade;
   LoginPage := CreateInputQueryPage(wpWelcome,
     'Installation Login',
     'Enter the name and password to install {#MyAppName}.',
